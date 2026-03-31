@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTCECA 2 — Cricket Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --bg:#04080F;--dark:#080E1A;--card:#0C1526;--card2:#101D30;
+  --border:#1a2d4a;--border2:#1f3860;
+  --cyan:#00E5FF;--orange:#FF6D00;--gold:#FFD600;--green:#00E676;--red:#FF1744;--purple:#D500F9;
+  --text:#E8F4FD;--muted:#4a7090;--muted2:#2a4560;
+  --glow-c:rgba(0,229,255,0.35);--glow-o:rgba(255,109,0,0.35);
+  --radius:6px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Rajdhani',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;position:relative}
+
+/* ANIMATED BG */
+body::before{
+  content:'';position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 80%,rgba(0,229,255,0.04) 0%,transparent 60%),
+    radial-gradient(ellipse 50% 60% at 80% 20%,rgba(255,109,0,0.05) 0%,transparent 60%),
+    radial-gradient(ellipse 40% 40% at 50% 50%,rgba(213,0,249,0.03) 0%,transparent 70%);
+  pointer-events:none;z-index:0;animation:bgPulse 8s ease-in-out infinite alternate;
+}
+@keyframes bgPulse{from{opacity:0.6}to{opacity:1}}
+
+/* PITCH LINES */
+body::after{
+  content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(90deg,transparent,transparent 119px,rgba(0,229,255,0.018) 120px);
+  pointer-events:none;z-index:0;
+}
+
+/* NAV */
+nav{
+  position:sticky;top:0;z-index:200;
+  background:rgba(4,8,15,0.92);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 3vw;height:64px;
+  box-shadow:0 2px 30px rgba(0,229,255,0.08);
+}
+.nav-logo{font-family:'Orbitron',sans-serif;font-size:1.25rem;font-weight:900;letter-spacing:3px;color:var(--text);text-decoration:none;display:flex;align-items:center;gap:0.5rem}
+.nav-logo .ball{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ff8a65,var(--orange));box-shadow:0 0 12px var(--orange);display:inline-block;position:relative;animation:spin 4s linear infinite}
+.nav-logo .ball::after{content:'';position:absolute;top:50%;left:0;right:0;height:1.5px;background:rgba(0,0,0,0.5);transform:translateY(-50%)}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.nav-logo span{color:var(--cyan);text-shadow:0 0 15px var(--cyan)}
+.nav-tabs{display:flex;gap:0}
+.nav-tab{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.8rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:0 1.1rem;height:64px;display:flex;align-items:center;cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s,text-shadow .15s;white-space:nowrap}
+.nav-tab:hover{color:var(--text)}
+.nav-tab.active{color:var(--cyan);border-bottom-color:var(--cyan);text-shadow:0 0 12px var(--cyan)}
+.btn-lock{background:rgba(255,214,0,0.12);border:1px solid rgba(255,214,0,0.4);color:var(--gold);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.72rem;letter-spacing:2px;text-transform:uppercase;padding:0.4rem 1rem;cursor:pointer;border-radius:var(--radius);transition:all .15s}
+.btn-lock:hover{background:rgba(255,214,0,0.25);box-shadow:0 0 12px rgba(255,214,0,0.3)}
+
+/* PAGES */
+.page{display:none;padding:2.5rem 3vw 5rem;position:relative;z-index:1;animation:fadeIn .35s ease}
+.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* HEADERS */
+.page-header{margin-bottom:2.5rem;position:relative}
+.page-eyebrow{font-family:'Rajdhani',sans-serif;font-size:0.72rem;font-weight:700;letter-spacing:5px;text-transform:uppercase;color:var(--cyan);margin-bottom:0.5rem;display:flex;align-items:center;gap:0.75rem}
+.page-eyebrow::before{content:'';width:24px;height:2px;background:linear-gradient(90deg,var(--cyan),transparent)}
+.page-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.5rem,5vw,4.5rem);letter-spacing:3px;line-height:0.95;background:linear-gradient(135deg,var(--text),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.page-sub{color:var(--muted);font-size:0.9rem;margin-top:0.6rem;font-weight:500}
+
+/* GLOWING CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(0,229,255,0.03),transparent);pointer-events:none}
+.card-orange{border-color:rgba(255,109,0,0.3)}
+.card-orange::before{background:linear-gradient(135deg,rgba(255,109,0,0.05),transparent)}
+
+/* BUTTONS */
+.btn{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.78rem;letter-spacing:2px;text-transform:uppercase;padding:0.45rem 1.1rem;border:none;cursor:pointer;border-radius:var(--radius);transition:all .15s;white-space:nowrap}
+.btn-cyan{background:var(--cyan);color:#000;box-shadow:0 0 16px rgba(0,229,255,0.4)}
+.btn-cyan:hover{background:#33EEFF;box-shadow:0 0 24px rgba(0,229,255,0.6);transform:translateY(-1px)}
+.btn-orange{background:var(--orange);color:#fff;box-shadow:0 0 16px rgba(255,109,0,0.4)}
+.btn-orange:hover{background:#FF8C00;box-shadow:0 0 24px rgba(255,109,0,0.6);transform:translateY(-1px)}
+.btn-gold{background:var(--gold);color:#000}
+.btn-gold:hover{background:#FFE033;transform:translateY(-1px)}
+.btn-outline{background:transparent;border:1px solid var(--border2);color:var(--muted)}
+.btn-outline:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn-red{background:var(--red);color:#fff}
+.btn-red:hover{background:#FF4569}
+.btn-sm{padding:0.28rem 0.65rem;font-size:0.68rem}
+.btn-wa{background:#25D366;color:#fff;display:inline-flex;align-items:center;gap:0.5rem}
+.btn-wa:hover{background:#1ebe5d}
+
+/* EXPORT BAR */
+.export-bar{display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:2rem;align-items:center}
+
+/* KPI CARDS */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-bottom:2.5rem}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem 1rem;text-align:center;position:relative;overflow:hidden;transition:transform .2s,border-color .2s}
+.kpi-card:hover{transform:translateY(-3px)}
+.kpi-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px}
+.kpi-cyan::after{background:linear-gradient(90deg,transparent,var(--cyan),transparent);box-shadow:0 0 8px var(--cyan)}
+.kpi-orange::after{background:linear-gradient(90deg,transparent,var(--orange),transparent)}
+.kpi-gold::after{background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.kpi-green::after{background:linear-gradient(90deg,transparent,var(--green),transparent)}
+.kpi-red::after{background:linear-gradient(90deg,transparent,var(--red),transparent)}
+.kpi-val{font-family:'Bebas Neue',sans-serif;font-size:3rem;letter-spacing:2px;line-height:1}
+.kpi-c{color:var(--cyan);text-shadow:0 0 20px rgba(0,229,255,0.5)}
+.kpi-o{color:var(--orange);text-shadow:0 0 20px rgba(255,109,0,0.5)}
+.kpi-g{color:var(--gold);text-shadow:0 0 20px rgba(255,214,0,0.5)}
+.kpi-gr{color:var(--green);text-shadow:0 0 20px rgba(0,230,118,0.5)}
+.kpi-r{color:var(--red)}
+.kpi-label{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.68rem;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-top:5px}
+
+/* NEXT MATCH BANNER */
+.next-banner{background:linear-gradient(135deg,rgba(0,229,255,0.08),rgba(255,109,0,0.05));border:1px solid rgba(0,229,255,0.25);border-radius:var(--radius);padding:1.75rem 2rem;margin-bottom:2.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;position:relative;overflow:hidden}
+.next-banner::before{content:'🏏';position:absolute;right:1rem;top:50%;transform:translateY(-50%);font-size:6rem;opacity:0.06;pointer-events:none}
+.next-label{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.7rem;letter-spacing:4px;text-transform:uppercase;color:var(--cyan);margin-bottom:0.4rem}
+.next-vs{font-family:'Bebas Neue',sans-serif;font-size:2.5rem;letter-spacing:3px;line-height:1;color:var(--text)}
+.next-meta{font-size:0.88rem;color:var(--muted);margin-top:0.3rem;font-weight:500}
+.avail-big{font-family:'Bebas Neue',sans-serif;font-size:4rem;color:var(--green);line-height:1;text-shadow:0 0 20px rgba(0,230,118,0.5)}
+.avail-label{font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+
+/* MATCH LIST */
+.matches-list{display:flex;flex-direction:column;gap:0.6rem}
+.match-item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem 1.5rem;display:grid;grid-template-columns:140px 1fr auto auto;align-items:center;gap:1rem;transition:all .2s;position:relative;overflow:hidden}
+.match-item::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--border);transition:background .2s}
+.match-item:hover{border-color:var(--cyan);transform:translateX(4px)}
+.match-item:hover::before{background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.match-item.next-match{border-color:rgba(255,214,0,0.5)}
+.match-item.next-match::before{background:var(--gold)}
+.match-date-col .date{font-family:'Bebas Neue',sans-serif;font-size:1.25rem;letter-spacing:1px}
+.venue-pill{display:inline-block;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;padding:2px 8px;margin-top:3px;border-radius:2px}
+.home-pill{background:rgba(0,230,118,0.15);color:var(--green)}
+.away-pill{background:rgba(255,29,68,0.12);color:#ff6b6b}
+.neutral-pill{background:rgba(255,214,0,0.12);color:var(--gold)}
+.practice-pill{background:rgba(213,0,249,0.12);color:var(--purple)}
+.match-vs{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:1.05rem;letter-spacing:1px}
+.match-vs small{font-weight:500;color:var(--muted);font-size:0.78rem;display:block;margin-top:2px}
+.match-avail{text-align:right}
+.avail-count{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1px;color:var(--green);line-height:1}
+.avail-label-sm{font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.match-actions{display:flex;gap:0.4rem;flex-wrap:wrap}
+
+/* RESULT PILLS */
+.result-pill{display:inline-block;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.68rem;letter-spacing:2px;padding:2px 8px;border-radius:3px}
+.result-W{background:rgba(0,230,118,0.2);color:var(--green);border:1px solid rgba(0,230,118,0.3)}
+.result-L{background:rgba(255,29,68,0.15);color:#ff6b6b;border:1px solid rgba(255,29,68,0.3)}
+.result-TBD{background:rgba(74,112,144,0.2);color:var(--muted);border:1px solid var(--border)}
+
+/* SECTION DIVIDER */
+.section-divider{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.7rem;letter-spacing:4px;text-transform:uppercase;color:var(--muted);padding:0.5rem 0;border-bottom:1px solid var(--border);margin:2.5rem 0 1.25rem;display:flex;align-items:center;gap:0.75rem}
+.section-divider::before{content:'';width:16px;height:2px;background:linear-gradient(90deg,var(--cyan),transparent)}
+
+/* LEGEND */
+.legend{display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1.5rem}
+.leg-item{display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:var(--muted);font-weight:600}
+.leg-dot{width:8px;height:8px;border-radius:50%}
+
+/* OVERLAY / MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(8px)}
+.overlay.hidden{display:none}
+.modal{background:var(--card);border:1px solid var(--border2);border-radius:10px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;padding:2rem;position:relative;box-shadow:0 0 60px rgba(0,229,255,0.1)}
+.modal-wide{max-width:680px}
+.modal-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;margin-bottom:0.25rem;background:linear-gradient(135deg,var(--text),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.modal-sub{font-size:0.85rem;color:var(--muted);margin-bottom:1.5rem;font-weight:500}
+.modal-close{position:absolute;top:1rem;right:1rem;background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;line-height:1;transition:color .15s}
+.modal-close:hover{color:var(--cyan)}
+
+/* FORM FIELDS */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.form-field{display:flex;flex-direction:column;gap:0.3rem}
+.form-field label{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.72rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.form-field input,.form-field select,.form-field textarea{background:var(--card2);border:1px solid var(--border);color:var(--text);padding:0.6rem 0.85rem;font-family:'Rajdhani',sans-serif;font-weight:500;font-size:0.95rem;border-radius:var(--radius);outline:none;transition:border-color .15s,box-shadow .15s;width:100%}
+.form-field input:focus,.form-field select:focus,.form-field textarea:focus{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,229,255,0.2)}
+select option{background:var(--dark)}
+
+/* AVAILABILITY */
+.player-avail-list{display:flex;flex-direction:column;gap:0.4rem}
+.player-avail-row{display:flex;align-items:center;justify-content:space-between;background:var(--card2);padding:0.6rem 1rem;border-radius:var(--radius);border:1px solid var(--border)}
+.player-avail-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.95rem;letter-spacing:0.5px}
+.avail-btns{display:flex;gap:0.35rem}
+.avail-btn{width:32px;height:28px;border:1px solid var(--border);background:var(--card);color:var(--muted);cursor:pointer;font-size:0.8rem;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:all .12s}
+.avail-btn.sel-A{background:rgba(0,230,118,0.2);color:var(--green);border-color:var(--green)}
+.avail-btn.sel-U{background:rgba(255,29,68,0.2);color:#ff6b6b;border-color:#ff6b6b}
+.avail-btn.sel-M{background:rgba(255,214,0,0.15);color:var(--gold);border-color:var(--gold)}
+.avail-btn.sel-Q{background:rgba(74,112,144,0.2);color:var(--muted);border-color:var(--muted)}
+
+/* SCORECARD */
+.scorecard-header{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem}
+.innings-box{background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;text-align:center}
+.innings-label{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.65rem;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-bottom:0.25rem}
+.innings-score{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:2px;color:var(--cyan)}
+
+.perf-section-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.72rem;letter-spacing:3px;text-transform:uppercase;color:var(--orange);margin:1rem 0 0.5rem;display:flex;align-items:center;gap:0.5rem}
+.perf-section-title::before{content:'';width:12px;height:2px;background:var(--orange)}
+.perf-header,.bat-row,.bowl-row{display:grid;gap:0.4rem;align-items:center}
+.bat-row{grid-template-columns:1fr 55px 55px 45px 45px 45px;background:var(--card2);border:1px solid var(--border);border-radius:3px;padding:0.5rem 0.75rem}
+.bowl-row{grid-template-columns:1fr 50px 55px 55px 45px;background:var(--card2);border:1px solid var(--border);border-radius:3px;padding:0.5rem 0.75rem}
+.perf-header{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.62rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:0.3rem 0.75rem}
+.bat-header{grid-template-columns:1fr 55px 55px 45px 45px 45px}
+.bowl-header{grid-template-columns:1fr 50px 55px 55px 45px}
+.perf-row input{text-align:center;padding:0.25rem 0.3rem;font-size:0.82rem;font-weight:600}
+.perf-row-label{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.85rem}
+.perf-rows-list{display:flex;flex-direction:column;gap:0.3rem;margin-bottom:0.5rem}
+
+/* ROSTER STATS TABLE */
+.stats-section{margin-bottom:2.5rem}
+.stats-section-title{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:2px;margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem}
+.stats-section-title span{font-family:'Rajdhani',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--muted);vertical-align:middle}
+.stats-table{width:100%;border-collapse:collapse;font-size:0.88rem}
+.stats-table th{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:0.6rem 0.75rem;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+.stats-table td{padding:0.65rem 0.75rem;border-bottom:1px solid var(--border);white-space:nowrap}
+.stats-table tr:last-child td{border-bottom:none}
+.stats-table tbody tr{transition:background .15s}
+.stats-table tbody tr:hover td{background:rgba(0,229,255,0.04)}
+.stats-table td:nth-child(n+2){text-align:center;font-family:'Rajdhani',sans-serif;font-size:0.95rem;font-weight:700}
+.rank-1 td:first-child{color:var(--gold)}
+.rank-2 td:first-child{color:#ccc}
+.rank-3 td:first-child{color:#cd8c40}
+.badge{font-size:0.55rem;font-weight:900;letter-spacing:1px;padding:1px 5px;border-radius:2px;margin-left:5px;vertical-align:middle;display:inline-block}
+.captain-badge{background:rgba(255,214,0,0.15);color:var(--gold)}
+.youth-badge{background:rgba(0,230,118,0.12);color:var(--green)}
+.highlight-val{color:var(--cyan);text-shadow:0 0 8px rgba(0,229,255,0.4)}
+.highlight-gold{color:var(--gold)}
+.highlight-orange{color:var(--orange)}
+
+/* DASHBOARD */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;position:relative;overflow:hidden}
+.chart-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.chart-card.cc-cyan::before{background:linear-gradient(90deg,transparent,var(--cyan),transparent);box-shadow:0 0 8px var(--cyan)}
+.chart-card.cc-orange::before{background:linear-gradient(90deg,transparent,var(--orange),transparent)}
+.chart-card.cc-gold::before{background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.chart-card.cc-green::before{background:linear-gradient(90deg,transparent,var(--green),transparent)}
+.chart-title{font-family:'Rajdhani',sans-serif;font-weight:900;font-size:0.88rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:1rem;color:var(--text)}
+canvas{max-height:220px}
+.insight-list{display:flex;flex-direction:column;gap:0.75rem;margin-top:1rem}
+.insight{display:flex;gap:1rem;align-items:flex-start;padding:0.85rem 1rem;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);border-left:3px solid var(--cyan)}
+.insight-icon{font-size:1.1rem;line-height:1.4}
+.insight-text{font-size:0.88rem;line-height:1.55;color:var(--text);font-weight:500}
+.insight-text strong{color:var(--cyan)}
+
+/* PIN */
+.pin-dots{display:flex;gap:0.7rem;justify-content:center;margin:1.25rem 0}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);background:transparent;transition:all .15s}
+.pin-dot.filled{background:var(--gold);border-color:var(--gold);box-shadow:0 0 8px rgba(255,214,0,0.5)}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;max-width:210px;margin:0 auto}
+.pin-key{background:var(--card2);border:1px solid var(--border);color:var(--text);font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1px;padding:0.7rem;cursor:pointer;border-radius:var(--radius);transition:all .12s;text-align:center}
+.pin-key:hover{background:rgba(255,214,0,0.1);border-color:var(--gold);color:var(--gold)}
+.pin-key.del{font-family:'Rajdhani',sans-serif;font-size:1rem;font-weight:700}
+.pin-error{color:var(--red);font-size:0.82rem;text-align:center;margin-top:0.5rem;min-height:1.2rem;font-weight:600}
+
+/* ADMIN BAR */
+.admin-inline{display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap}
+
+/* MATCH TYPE TABS */
+.type-tabs{display:flex;gap:0;margin-bottom:1.5rem;border-bottom:1px solid var(--border)}
+.type-tab{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.78rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:0.65rem 1.4rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+.type-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.type-tab:hover{color:var(--text)}
+
+/* SCORE LOCKED */
+.score-locked{opacity:0.35;pointer-events:none;cursor:not-allowed!important}
+
+/* GLOWING CRICKET BALL */
+.cricket-deco{position:absolute;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle at 35% 35%,rgba(255,140,0,0.15),transparent 70%);pointer-events:none}
+
+/* RESPONSIVE */
+@media(max-width:900px){
+  .kpi-grid{grid-template-columns:repeat(3,1fr)}
+  .charts-grid{grid-template-columns:1fr}
+  .form-grid{grid-template-columns:1fr}
+  .bat-row,.bat-header{grid-template-columns:1fr 48px 48px 40px 40px 40px}
+  .bowl-row,.bowl-header{grid-template-columns:1fr 44px 50px 50px 40px}
+}
+@media(max-width:640px){
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .match-item{grid-template-columns:1fr 1fr;gap:0.75rem}
+  .match-actions{grid-column:1/-1}
+  nav{padding:0 1rem}
+  .nav-tab{padding:0 0.6rem;font-size:0.7rem;letter-spacing:1px}
+  .scorecard-header{grid-template-columns:1fr}
+}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
+</style>
+</head>
+<body>
+
+<!-- ══ NAV ══ -->
+<nav>
+  <a href="#" class="nav-logo" onclick="showPage('home');return false">
+    <div class="ball"></div>HTCECA <span>2</span>
+  </a>
+  <div class="nav-tabs">
+    <div class="nav-tab active" data-page="home" onclick="showPage('home')">Home</div>
+    <div class="nav-tab" data-page="schedule" onclick="showPage('schedule')">Schedule</div>
+    <div class="nav-tab" data-page="roster" onclick="showPage('roster')">Stats</div>
+    <div class="nav-tab" data-page="dashboard" onclick="showPage('dashboard')">Dashboard</div>
+  </div>
+  <button class="btn-lock" onclick="toggleAdminModal()" id="nav-lock-btn">🔒 Admin</button>
+</nav>
+
+<!-- ══ HOME ══ -->
+<div class="page active" id="page-home">
+  <div class="page-header">
+    <div class="page-eyebrow">Cricket · Season 2025 / 2026</div>
+    <h1 class="page-title">HTCECA 2</h1>
+    <p class="page-sub">Team Hub — Availability · Scorecards · Performance</p>
+  </div>
+
+  <div class="export-bar">
+    <button class="btn btn-wa" onclick="shareWhatsApp()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      WhatsApp
+    </button>
+    <button class="btn btn-outline" onclick="exportPDF()">📄 PDF Report</button>
+    <div id="home-admin-bar"></div>
+  </div>
+
+  <div id="next-match-banner"></div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card kpi-cyan"><div class="kpi-val kpi-c" id="kpi-wins">0</div><div class="kpi-label">Wins</div></div>
+    <div class="kpi-card kpi-red"><div class="kpi-val kpi-r" id="kpi-losses">0</div><div class="kpi-label">Losses</div></div>
+    <div class="kpi-card kpi-orange"><div class="kpi-val kpi-o" id="kpi-runs">0</div><div class="kpi-label">Team Runs</div></div>
+    <div class="kpi-card kpi-gold"><div class="kpi-val kpi-g" id="kpi-wkts">0</div><div class="kpi-label">Wickets Taken</div></div>
+    <div class="kpi-card kpi-green"><div class="kpi-val kpi-gr" id="kpi-played">0</div><div class="kpi-label">Played</div></div>
+  </div>
+
+  <div class="section-divider">⚡ Upcoming Fixtures</div>
+  <div id="home-upcoming" class="matches-list"></div>
+</div>
+
+<!-- ══ SCHEDULE ══ -->
+<div class="page" id="page-schedule">
+  <div class="page-header">
+    <div class="page-eyebrow">Full Calendar</div>
+    <h1 class="page-title">Schedule</h1>
+    <p class="page-sub">All matches. Mark availability or enter full cricket scorecards.</p>
+  </div>
+
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Available</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#ff6b6b"></div>Unavailable</div>
+    <div class="leg-item"><div class="leg-dot" style="background:var(--gold)"></div>Maybe</div>
+    <div class="leg-item"><div class="leg-dot" style="background:var(--muted)"></div>No Reply</div>
+    <div id="edit-players-btn-wrap" style="display:none;margin-left:auto">
+      <button class="btn btn-outline" style="border-color:var(--purple);color:var(--purple)" onclick="openEditPlayers()">👥 Edit Player Names</button>
+    </div>
+  </div>
+
+  <!-- ADD MATCH (admin only) -->
+  <div id="add-match-section" class="card card-orange" style="margin-bottom:2rem;display:none">
+    <div class="chart-title" style="color:var(--orange)">➕ Add New Match</div>
+    <div class="form-grid">
+      <div class="form-field"><label>Date</label><input type="date" id="new-date"></div>
+      <div class="form-field"><label>Opponent</label><input type="text" id="new-opp" placeholder="e.g. HERMES-DVS 2"></div>
+      <div class="form-field"><label>Venue</label>
+        <select id="new-venue"><option value="HOME">Home</option><option value="AWAY">Away</option><option value="NEUTRAL">Neutral</option></select>
+      </div>
+      <div class="form-field"><label>Match Type</label>
+        <select id="new-type"><option value="league">League</option><option value="practice">Practice / Friendly</option><option value="cup">Cup</option></select>
+      </div>
+      <div class="form-field"><label>Overs</label><input type="number" id="new-overs" placeholder="e.g. 20" min="1" value="20"></div>
+      <div class="form-field"><label>Notes</label><input type="text" id="new-notes" placeholder="Optional notes"></div>
+    </div>
+    <button class="btn btn-orange" onclick="addMatch()">Add Match</button>
+  </div>
+
+  <div class="section-divider">League Matches</div>
+  <div id="league-list" class="matches-list"></div>
+
+  <div class="section-divider">Practice / Friendlies / Cup</div>
+  <div id="practice-list" class="matches-list"></div>
+  <p id="no-practice" style="color:var(--muted);font-size:0.85rem;font-weight:500;display:none">No other matches added yet. Unlock admin to add matches.</p>
+</div>
+
+<!-- ══ ROSTER / STATS ══ -->
+<div class="page" id="page-roster">
+  <div class="page-header">
+    <div class="page-eyebrow">Player Stats</div>
+    <h1 class="page-title">Cricket Stats</h1>
+    <p class="page-sub">Batting & bowling statistics accumulated across all matches.</p>
+  </div>
+
+  <div class="type-tabs">
+    <div class="type-tab active" onclick="switchRosterTab('bat',this)">🏏 Batting</div>
+    <div class="type-tab" onclick="switchRosterTab('bowl',this)">⚡ Bowling</div>
+    <div class="type-tab" onclick="switchRosterTab('field',this)">🧤 Fielding</div>
+  </div>
+
+  <div id="roster-bat" class="stats-section">
+    <div class="card" style="overflow-x:auto">
+      <table class="stats-table">
+        <thead><tr>
+          <th>Player</th><th title="Innings">Inn</th><th title="Not Outs">NO</th>
+          <th title="Total Runs">Runs</th><th title="Highest Score">HS</th>
+          <th title="Batting Average">Avg</th><th title="Strike Rate">SR</th>
+          <th title="Fifties">50s</th><th title="Hundreds">100s</th><th title="Sixes">6s</th>
+        </tr></thead>
+        <tbody id="bat-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="roster-bowl" class="stats-section" style="display:none">
+    <div class="card" style="overflow-x:auto">
+      <table class="stats-table">
+        <thead><tr>
+          <th>Player</th><th title="Matches">M</th><th title="Overs">Ov</th>
+          <th title="Runs Conceded">Runs</th><th title="Wickets">Wkts</th>
+          <th title="Best Bowling">Best</th><th title="Economy">Econ</th>
+          <th title="Bowling Average">Avg</th><th title="Strike Rate">SR</th>
+        </tr></thead>
+        <tbody id="bowl-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="roster-field" class="stats-section" style="display:none">
+    <div class="card" style="overflow-x:auto">
+      <table class="stats-table">
+        <thead><tr>
+          <th>Player</th><th>Catches</th><th>Run Outs</th><th>Stumpings</th>
+        </tr></thead>
+        <tbody id="field-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DASHBOARD ══ -->
+<div class="page" id="page-dashboard">
+  <div class="page-header">
+    <div class="page-eyebrow">Performance Intelligence</div>
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-sub">Cricket analytics, trends & improvement insights.</p>
+  </div>
+
+  <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi-card kpi-cyan"><div class="kpi-val kpi-c" id="d-wins">0</div><div class="kpi-label">Wins</div></div>
+    <div class="kpi-card kpi-orange"><div class="kpi-val kpi-o" id="d-runs">0</div><div class="kpi-label">Total Runs</div></div>
+    <div class="kpi-card kpi-gold"><div class="kpi-val kpi-g" id="d-wkts">0</div><div class="kpi-label">Wkts Taken</div></div>
+    <div class="kpi-card kpi-green"><div class="kpi-val kpi-gr" id="d-avg-score">—</div><div class="kpi-label">Avg Score</div></div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card cc-orange"><div class="chart-title">🏏 Top Run Scorers</div><canvas id="chart-runs"></canvas></div>
+    <div class="chart-card cc-cyan"><div class="chart-title">⚡ Top Wicket Takers</div><canvas id="chart-wkts"></canvas></div>
+    <div class="chart-card cc-gold"><div class="chart-title">📈 Team Score Per Match</div><canvas id="chart-scores"></canvas></div>
+    <div class="chart-card cc-green"><div class="chart-title">⭐ Strike Rates</div><canvas id="chart-sr"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="chart-title" style="color:var(--cyan)">🔍 Team Insights & Improvement Areas</div>
+    <div class="insight-list" id="insights-list">
+      <div class="insight"><span class="insight-icon">🏏</span><span class="insight-text">Enter match scorecards to unlock cricket performance insights.</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ AVAILABILITY MODAL ══ -->
+<div class="overlay hidden" id="avail-overlay">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('avail-overlay')">✕</button>
+    <div class="modal-title" id="avail-modal-title">Availability</div>
+    <div class="modal-sub" id="avail-modal-sub"></div>
+    <div class="player-avail-list" id="avail-player-list"></div>
+    <div style="margin-top:1.25rem;display:flex;justify-content:flex-end;gap:0.5rem">
+      <button class="btn btn-outline" onclick="closeModal('avail-overlay')">Close</button>
+      <button class="btn btn-cyan" onclick="saveAvail()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCORECARD MODAL ══ -->
+<div class="overlay hidden" id="score-overlay">
+  <div class="modal modal-wide">
+    <button class="modal-close" onclick="closeModal('score-overlay')">✕</button>
+    <div class="modal-title" id="score-modal-title">Scorecard</div>
+    <div class="modal-sub" id="score-modal-sub"></div>
+
+    <div class="scorecard-header">
+      <div class="innings-box">
+        <div class="innings-label">HTCECA 2 Score</div>
+        <div style="display:flex;gap:0.5rem;justify-content:center;align-items:center;margin-top:0.5rem">
+          <input type="number" id="score-runs" min="0" value="0" style="width:70px;text-align:center;font-family:'Bebas Neue';font-size:1.5rem;background:var(--card);border:1px solid var(--border);color:var(--cyan);padding:0.3rem;border-radius:var(--radius);outline:none">
+          <span style="color:var(--muted);font-weight:700">/</span>
+          <input type="number" id="score-wkts" min="0" max="10" value="0" style="width:50px;text-align:center;font-family:'Bebas Neue';font-size:1.5rem;background:var(--card);border:1px solid var(--border);color:var(--orange);padding:0.3rem;border-radius:var(--radius);outline:none">
+        </div>
+        <div style="margin-top:0.4rem;display:flex;gap:0.4rem;justify-content:center;align-items:center">
+          <span style="font-size:0.72rem;color:var(--muted);font-weight:700">in</span>
+          <input type="number" id="score-overs-bat" min="0" step="0.1" value="0" style="width:55px;text-align:center;font-size:0.85rem;background:var(--card);border:1px solid var(--border);color:var(--text);padding:0.25rem;border-radius:var(--radius);outline:none">
+          <span style="font-size:0.72rem;color:var(--muted);font-weight:700">overs</span>
+        </div>
+      </div>
+      <div class="innings-box">
+        <div class="innings-label">Opponent Score</div>
+        <div style="display:flex;gap:0.5rem;justify-content:center;align-items:center;margin-top:0.5rem">
+          <input type="number" id="score-opp-runs" min="0" value="0" style="width:70px;text-align:center;font-family:'Bebas Neue';font-size:1.5rem;background:var(--card);border:1px solid var(--border);color:#ff6b6b;padding:0.3rem;border-radius:var(--radius);outline:none">
+          <span style="color:var(--muted);font-weight:700">/</span>
+          <input type="number" id="score-opp-wkts" min="0" max="10" value="0" style="width:50px;text-align:center;font-family:'Bebas Neue';font-size:1.5rem;background:var(--card);border:1px solid var(--border);color:var(--muted);padding:0.3rem;border-radius:var(--radius);outline:none">
+        </div>
+        <div style="margin-top:0.4rem;display:flex;gap:0.4rem;justify-content:center;align-items:center">
+          <span style="font-size:0.72rem;color:var(--muted);font-weight:700">in</span>
+          <input type="number" id="score-overs-bowl" min="0" step="0.1" value="0" style="width:55px;text-align:center;font-size:0.85rem;background:var(--card);border:1px solid var(--border);color:var(--text);padding:0.25rem;border-radius:var(--radius);outline:none">
+          <span style="font-size:0.72rem;color:var(--muted);font-weight:700">overs</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-field" style="margin-bottom:1rem">
+      <label>Match Notes / Result Summary</label>
+      <textarea id="score-notes" rows="2" style="resize:vertical"></textarea>
+    </div>
+
+    <!-- BATTING -->
+    <div class="perf-section-title">🏏 Batting Scorecard</div>
+    <div class="perf-header bat-header"><span>Player</span><span>Runs</span><span>Balls</span><span>4s</span><span>6s</span><span>Out?</span></div>
+    <div class="perf-rows-list" id="bat-perf-list"></div>
+
+    <!-- BOWLING -->
+    <div class="perf-section-title">⚡ Bowling Figures</div>
+    <div class="perf-header bowl-header"><span>Player</span><span>Overs</span><span>Runs</span><span>Wickets</span><span>Catches</span></div>
+    <div class="perf-rows-list" id="bowl-perf-list"></div>
+
+    <div style="margin-top:1.5rem;display:flex;justify-content:flex-end;gap:0.5rem">
+      <button class="btn btn-outline" onclick="closeModal('score-overlay')">Cancel</button>
+      <button class="btn btn-cyan" onclick="saveScore()">💾 Save Scorecard</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PIN MODAL ══ -->
+<div class="overlay hidden" id="pin-overlay">
+  <div class="modal" style="max-width:320px;text-align:center">
+    <button class="modal-close" onclick="closeModal('pin-overlay')">✕</button>
+    <div id="pin-modal-icon" style="font-size:2.5rem;margin-bottom:0.5rem">🔒</div>
+    <div class="modal-title" id="pin-modal-title">Admin Login</div>
+    <div class="modal-sub" id="pin-modal-sub">Enter 4-digit PIN to unlock admin features.</div>
+    <div class="pin-dots" id="pin-dots">
+      <div class="pin-dot" id="pd0"></div><div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div><div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-keypad">
+      <button class="pin-key" onclick="pinPress('1')">1</button><button class="pin-key" onclick="pinPress('2')">2</button><button class="pin-key" onclick="pinPress('3')">3</button>
+      <button class="pin-key" onclick="pinPress('4')">4</button><button class="pin-key" onclick="pinPress('5')">5</button><button class="pin-key" onclick="pinPress('6')">6</button>
+      <button class="pin-key" onclick="pinPress('7')">7</button><button class="pin-key" onclick="pinPress('8')">8</button><button class="pin-key" onclick="pinPress('9')">9</button>
+      <button class="pin-key del" onclick="pinClear()">C</button><button class="pin-key" onclick="pinPress('0')">0</button><button class="pin-key del" onclick="pinDel()">⌫</button>
+    </div>
+    <div class="pin-error" id="pin-error"></div>
+  </div>
+</div>
+
+<!-- ══ WHATSAPP MODAL ══ -->
+<div class="overlay hidden" id="wa-overlay">
+  <div class="modal" style="max-width:400px">
+    <button class="modal-close" onclick="closeModal('wa-overlay')">✕</button>
+    <div class="modal-title">📲 Share</div>
+    <div class="modal-sub" style="margin-bottom:1.25rem">Choose a message to send your team</div>
+    <div style="display:flex;flex-direction:column;gap:0.75rem">
+      <button class="btn btn-cyan" style="text-align:left;padding:0.85rem 1.1rem" onclick="waShare('next')">⚡ Next match availability call</button>
+      <button class="btn btn-outline" style="text-align:left;padding:0.85rem 1.1rem" onclick="waShare('results')">📋 Latest match results</button>
+      <button class="btn btn-outline" style="text-align:left;padding:0.85rem 1.1rem" onclick="waShare('schedule')">📅 Upcoming fixtures</button>
+      <button class="btn btn-outline" style="text-align:left;padding:0.85rem 1.1rem" onclick="waShare('standings')">🏆 Season standings</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ EDIT MATCH MODAL ══ -->
+<div class="overlay hidden" id="edit-match-overlay">
+  <div class="modal" style="max-width:440px">
+    <button class="modal-close" onclick="closeModal('edit-match-overlay')">✕</button>
+    <div class="modal-title">✏️ Edit Match</div>
+    <div class="modal-sub">Update league match details</div>
+    <input type="hidden" id="edit-match-id">
+    <div class="form-grid">
+      <div class="form-field"><label>Date</label><input type="date" id="edit-match-date"></div>
+      <div class="form-field"><label>Opponent Name</label><input type="text" id="edit-match-opp" placeholder="Opponent"></div>
+      <div class="form-field"><label>Venue</label>
+        <select id="edit-match-venue">
+          <option value="HOME">Home</option>
+          <option value="AWAY">Away</option>
+          <option value="NEUTRAL">Neutral</option>
+        </select>
+      </div>
+      <div class="form-field"><label>Overs</label><input type="number" id="edit-match-overs" min="1" value="20"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.5rem">
+      <button class="btn btn-outline btn-sm" onclick="resetMatchOverride()" style="color:var(--muted)">↩ Reset to Default</button>
+      <div style="display:flex;gap:0.5rem">
+        <button class="btn btn-outline" onclick="closeModal('edit-match-overlay')">Cancel</button>
+        <button class="btn btn-cyan" onclick="saveMatchOverride()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ EDIT PLAYERS MODAL ══ -->
+<div class="overlay hidden" id="edit-players-overlay">
+  <div class="modal" style="max-width:440px">
+    <button class="modal-close" onclick="closeModal('edit-players-overlay')">✕</button>
+    <div class="modal-title">👥 Edit Players</div>
+    <div class="modal-sub">Update player names. Captain & Youth flags can be toggled.</div>
+    <div id="edit-players-list" style="display:flex;flex-direction:column;gap:0.5rem;max-height:60vh;overflow-y:auto"></div>
+    <div style="margin-top:1.25rem;display:flex;justify-content:space-between;align-items:center">
+      <button class="btn btn-outline btn-sm" onclick="resetAllPlayerNames()" style="color:var(--muted)">↩ Reset All Names</button>
+      <div style="display:flex;gap:0.5rem">
+        <button class="btn btn-outline" onclick="closeModal('edit-players-overlay')">Cancel</button>
+        <button class="btn btn-cyan" onclick="savePlayerNames()">Save Names</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════
+const PLAYERS_BASE = [
+  {id:'p1',name:'Prashant Ingle',captain:false,youth:false},
+  {id:'p2',name:'Lakshay Handa',captain:false,youth:false},
+  {id:'p3',name:'Sagar Patil',captain:false,youth:false},
+  {id:'p4',name:'Ratheesh Nair',captain:true,youth:false},
+  {id:'p5',name:'Varun Rangarajan',captain:false,youth:false},
+  {id:'p6',name:'Ambati Murali',captain:false,youth:false},
+  {id:'p7',name:'Mohan B',captain:false,youth:false},
+  {id:'p8',name:'Ragul S',captain:false,youth:false},
+  {id:'p9',name:'Avinash Ramkumar',captain:false,youth:false},
+  {id:'p10',name:'Rogith Balaji',captain:false,youth:false},
+  {id:'p11',name:'Vishnu',captain:false,youth:true},
+  {id:'p12',name:'Deepan',captain:false,youth:false},
+  {id:'p13',name:'Neel',captain:false,youth:true},
+];
+// Live PLAYERS array — names may be overridden by admin
+let PLAYERS = PLAYERS_BASE.map(p=>({...p}));
+
+// Built-in league matches
+const BUILTIN_MATCHES = [
+  {id:'m1',date:'2025-05-03',venue:'HOME',opponent:'HERMES-DVS 2',type:'league',overs:20},
+  {id:'m2',date:'2025-05-09',venue:'AWAY',opponent:'ACA 1',type:'league',overs:20},
+  {id:'m3',date:'2025-05-17',venue:'HOME',opponent:'QUI VIVE 3',type:'league',overs:20},
+  {id:'m4',date:'2025-05-23',venue:'AWAY',opponent:'VRA 4',type:'league',overs:20},
+  {id:'m5',date:'2025-05-31',venue:'HOME',opponent:'VVV 3',type:'league',overs:20},
+  {id:'m6',date:'2025-06-07',venue:'HOME',opponent:'HBS 2',type:'league',overs:20},
+  {id:'m7',date:'2025-06-14',venue:'AWAY',opponent:'GROEN EN WIT 2',type:'league',overs:20},
+  {id:'m8',date:'2025-06-21',venue:'AWAY',opponent:'HERMES-DVS 2',type:'league',overs:20},
+  {id:'m9',date:'2025-06-28',venue:'HOME',opponent:'ACA 1',type:'league',overs:20},
+  {id:'m10',date:'2025-07-04',venue:'AWAY',opponent:'QUI VIVE 3',type:'league',overs:20},
+  {id:'m11',date:'2025-07-12',venue:'HOME',opponent:'VRA 4',type:'league',overs:20},
+  {id:'m12',date:'2025-07-19',venue:'AWAY',opponent:'VVV 3',type:'league',overs:20},
+  {id:'m13',date:'2025-08-02',venue:'AWAY',opponent:'HBS 2',type:'league',overs:20},
+  {id:'m14',date:'2025-08-09',venue:'HOME',opponent:'GROEN EN WIT 2',type:'league',overs:20},
+];
+
+let state = {
+  availability:{},
+  results:{},
+  extraMatches:[],
+  playerNames:{},    // id -> custom name
+  matchOverrides:{}, // id -> {date, opponent, venue, overs}
+};
+
+function loadState(){
+  try{const s=localStorage.getItem('htceca2_v2');if(s)state=JSON.parse(s);
+    if(!state.extraMatches)state.extraMatches=[];
+    if(!state.playerNames)state.playerNames={};
+    if(!state.matchOverrides)state.matchOverrides={};
+  }catch(e){}
+  // Apply saved player name overrides
+  PLAYERS=PLAYERS_BASE.map(p=>({
+    ...p,
+    name:state.playerNames[p.id]||p.name,
+    captain:state.playerFlags?.[p.id]?.captain??p.captain,
+    youth:state.playerFlags?.[p.id]?.youth??p.youth,
+  }));
+}
+function saveState(){localStorage.setItem('htceca2_v2',JSON.stringify(state));}
+
+// ═══════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════
+function allMatches(){
+  const builtinWithOverrides=BUILTIN_MATCHES.map(m=>{
+    const ov=state.matchOverrides[m.id]||{};
+    return {...m,...ov};
+  });
+  return [...builtinWithOverrides,...state.extraMatches].sort((a,b)=>a.date.localeCompare(b.date));
+}
+function leagueMatches(){return allMatches().filter(m=>m.type==='league');}
+function otherMatches(){return allMatches().filter(m=>m.type!=='league');}
+function getResult(mid){return state.results[mid]||null;}
+function availCount(mid){return Object.values(state.availability[mid]||{}).filter(v=>v==='A').length;}
+function fmtDate(d){return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});}
+function nextMatch(){
+  const today=new Date();today.setHours(0,0,0,0);
+  return allMatches().find(m=>{const d=new Date(m.date+'T12:00:00');d.setHours(0,0,0,0);return d>=today&&!getResult(m.id);});
+}
+function resultTag(mid){
+  const r=getResult(mid);
+  if(!r)return'<span class="result-pill result-TBD">TBD</span>';
+  return r.runs>r.oppRuns?`<span class="result-pill result-W">WON ${r.runs}/${r.wkts}</span>`:`<span class="result-pill result-L">LOST ${r.runs}/${r.wkts}</span>`;
+}
+
+// ═══════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.querySelector(`[data-page="${id}"]`).classList.add('active');
+  if(id==='home')renderHome();
+  if(id==='schedule')renderSchedule();
+  if(id==='roster')renderRoster();
+  if(id==='dashboard')renderDashboard();
+}
+
+// ═══════════════════════════════════════════
+// MATCH CARD
+// ═══════════════════════════════════════════
+function matchCard(m,isNext){
+  const venueClass=m.venue==='HOME'?'home-pill':m.venue==='AWAY'?'away-pill':m.type==='practice'?'practice-pill':'neutral-pill';
+  const ac=availCount(m.id);
+  const r=getResult(m.id);
+  const typeLabel=m.type==='league'?'League':m.type==='cup'?'Cup':'Practice/Friendly';
+  const isExtra=!BUILTIN_MATCHES.find(x=>x.id===m.id);
+  return `<div class="match-item${isNext?' next-match':''}">
+    <div class="match-date-col">
+      <div class="date">${fmtDate(m.date)}</div>
+      <span class="venue-pill ${venueClass}">${m.venue}</span>
+    </div>
+    <div class="match-vs">
+      vs ${m.opponent}
+      <small>${typeLabel}${m.overs?' · '+m.overs+' ov':''} · ${resultTag(m.id)}</small>
+    </div>
+    <div class="match-avail">
+      <div class="avail-count">${ac}</div>
+      <div class="avail-label-sm">Available</div>
+    </div>
+    <div class="match-actions">
+      <button class="btn btn-outline btn-sm" onclick="openAvail('${m.id}')">✋ Avail</button>
+      <button class="btn ${r?'btn-outline':'btn-gold'} btn-sm ${adminUnlocked?'':'score-locked'}" onclick="${adminUnlocked?`openScore('${m.id}')`:'toggleAdminModal()'}" title="${adminUnlocked?'':'Admin required'}">📋 ${r?'Edit':'Score'}</button>
+      ${isExtra&&adminUnlocked?`<button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red)" onclick="removeMatch('${m.id}')">✕</button>`:''}
+      ${!isExtra&&adminUnlocked?`<button class="btn btn-outline btn-sm" style="color:var(--cyan);border-color:var(--cyan)" onclick="openEditMatch('${m.id}')">✏️ Edit</button>`:''}
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════
+// HOME
+// ═══════════════════════════════════════════
+function renderHome(){
+  let W=0,L=0,totalRuns=0,totalWkts=0,played=0;
+  allMatches().forEach(m=>{
+    const r=getResult(m.id);if(!r)return;played++;
+    totalRuns+=parseInt(r.runs)||0;
+    totalWkts+=parseInt(r.wkts)||0;
+    if((r.runs||0)>(r.oppRuns||0))W++;else L++;
+  });
+  document.getElementById('kpi-wins').textContent=W;
+  document.getElementById('kpi-losses').textContent=L;
+  document.getElementById('kpi-runs').textContent=totalRuns;
+  document.getElementById('kpi-wkts').textContent=totalWkts;
+  document.getElementById('kpi-played').textContent=played;
+
+  const nm=nextMatch();
+  const banner=document.getElementById('next-match-banner');
+  if(nm){
+    const ac=availCount(nm.id);
+    banner.innerHTML=`<div class="next-banner">
+      <div>
+        <div class="next-label">⚡ Next Match</div>
+        <div class="next-vs">vs ${nm.opponent}</div>
+        <div class="next-meta">${fmtDate(nm.date)} · ${nm.venue} · ${nm.type==='league'?'League':nm.type==='cup'?'Cup':'Friendly'}${nm.overs?' · '+nm.overs+' overs':''}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="avail-big">${ac}</div>
+        <div class="avail-label">players available</div>
+        <button class="btn btn-cyan" style="margin-top:0.6rem" onclick="openAvail('${nm.id}')">✋ Mark Availability</button>
+      </div>
+    </div>`;
+  } else {
+    banner.innerHTML=`<div class="next-banner"><div class="next-label">✅ Season</div><div class="next-vs">All matches complete!</div></div>`;
+  }
+
+  const today=new Date();today.setHours(0,0,0,0);
+  const upcoming=allMatches().filter(m=>{const d=new Date(m.date+'T12:00:00');d.setHours(0,0,0,0);return d>=today;}).slice(0,5);
+  document.getElementById('home-upcoming').innerHTML=upcoming.map((m,i)=>matchCard(m,i===0&&!getResult(m.id))).join('')||'<p style="color:var(--muted);font-weight:600">No upcoming matches.</p>';
+  renderAdminBar();
+}
+
+// ═══════════════════════════════════════════
+// SCHEDULE
+// ═══════════════════════════════════════════
+function renderSchedule(){
+  const nm=nextMatch();
+  document.getElementById('league-list').innerHTML=leagueMatches().map(m=>matchCard(m,nm&&nm.id===m.id)).join('');
+  const others=otherMatches();
+  const el=document.getElementById('practice-list');
+  const empty=document.getElementById('no-practice');
+  if(others.length===0){el.innerHTML='';empty.style.display='block';}
+  else{empty.style.display='none';el.innerHTML=others.map(m=>matchCard(m,nm&&nm.id===m.id)).join('');}
+  document.getElementById('add-match-section').style.display=adminUnlocked?'block':'none';
+}
+
+function addMatch(){
+  const d=document.getElementById('new-date').value;
+  const opp=document.getElementById('new-opp').value.trim();
+  const venue=document.getElementById('new-venue').value;
+  const type=document.getElementById('new-type').value;
+  const overs=parseInt(document.getElementById('new-overs').value)||20;
+  const notes=document.getElementById('new-notes').value.trim();
+  if(!d||!opp){alert('Please enter date and opponent.');return;}
+  const id='x'+Date.now();
+  state.extraMatches.push({id,date:d,venue,opponent:opp,type,overs,notes});
+  saveState();
+  ['new-date','new-opp','new-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('new-overs').value='20';
+  renderSchedule();
+}
+
+function removeMatch(id){
+  if(!confirm('Remove this match?'))return;
+  state.extraMatches=state.extraMatches.filter(m=>m.id!==id);
+  delete state.availability[id];delete state.results[id];
+  saveState();renderSchedule();renderHome();
+}
+
+// ═══════════════════════════════════════════
+// AVAILABILITY
+// ═══════════════════════════════════════════
+let currentMatchId=null;
+function openAvail(mid){
+  currentMatchId=mid;
+  const m=allMatches().find(x=>x.id===mid);
+  document.getElementById('avail-modal-title').textContent=`vs ${m.opponent}`;
+  document.getElementById('avail-modal-sub').textContent=`${fmtDate(m.date)} · ${m.venue}`;
+  const av=state.availability[mid]||{};
+  document.getElementById('avail-player-list').innerHTML=PLAYERS.map(p=>{
+    const cur=av[p.name]||'';
+    return `<div class="player-avail-row">
+      <span class="player-avail-name">${p.name}${p.captain?'<span class="badge captain-badge">C</span>':''}${p.youth?'<span class="badge youth-badge">Y</span>':''}</span>
+      <div class="avail-btns">
+        <button class="avail-btn ${cur==='A'?'sel-A':''}" onclick="setAvail('${p.name}','A',this)">✅</button>
+        <button class="avail-btn ${cur==='U'?'sel-U':''}" onclick="setAvail('${p.name}','U',this)">❌</button>
+        <button class="avail-btn ${cur==='M'?'sel-M':''}" onclick="setAvail('${p.name}','M',this)">🤔</button>
+        <button class="avail-btn ${cur==='?'?'sel-Q':''}" onclick="setAvail('${p.name}','?',this)">❓</button>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('avail-overlay').classList.remove('hidden');
+}
+function setAvail(name,val,btn){
+  btn.closest('.player-avail-row').querySelectorAll('.avail-btn').forEach(b=>b.className='avail-btn');
+  btn.classList.add({'A':'sel-A','U':'sel-U','M':'sel-M','?':'sel-Q'}[val]);
+  if(!state.availability[currentMatchId])state.availability[currentMatchId]={};
+  state.availability[currentMatchId][name]=val;
+}
+function saveAvail(){saveState();closeModal('avail-overlay');renderHome();if(document.getElementById('page-schedule').classList.contains('active'))renderSchedule();}
+
+// ═══════════════════════════════════════════
+// SCORECARD
+// ═══════════════════════════════════════════
+function openScore(mid){
+  currentMatchId=mid;
+  const m=allMatches().find(x=>x.id===mid);
+  document.getElementById('score-modal-title').textContent=`vs ${m.opponent}`;
+  document.getElementById('score-modal-sub').textContent=`${fmtDate(m.date)} · HTCECA 2 ${m.venue==='HOME'?'(Home)':'(Away)'}`;
+  const r=state.results[mid]||{};
+  document.getElementById('score-runs').value=r.runs||0;
+  document.getElementById('score-wkts').value=r.wkts||0;
+  document.getElementById('score-overs-bat').value=r.oversPlayed||0;
+  document.getElementById('score-opp-runs').value=r.oppRuns||0;
+  document.getElementById('score-opp-wkts').value=r.oppWkts||0;
+  document.getElementById('score-overs-bowl').value=r.oppOvers||0;
+  document.getElementById('score-notes').value=r.notes||'';
+
+  const av=state.availability[mid]||{};
+  const activePlayers=PLAYERS.filter(p=>av[p.name]==='A'||!av[p.name]);
+
+  const batPerfs=r.batting||[];
+  document.getElementById('bat-perf-list').innerHTML=activePlayers.map(p=>{
+    const bp=batPerfs.find(x=>x.name===p.name)||{};
+    return `<div class="bat-row perf-row">
+      <span class="perf-row-label">${p.name.split(' ')[0]}</span>
+      <input type="number" min="0" value="${bp.runs||0}" data-p="${p.name}" data-f="runs">
+      <input type="number" min="0" value="${bp.balls||0}" data-p="${p.name}" data-f="balls">
+      <input type="number" min="0" value="${bp.fours||0}" data-p="${p.name}" data-f="fours">
+      <input type="number" min="0" value="${bp.sixes||0}" data-p="${p.name}" data-f="sixes">
+      <select data-p="${p.name}" data-f="out" style="padding:0.2rem;font-size:0.8rem;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:3px;outline:none">
+        <option value="0" ${!bp.out?'selected':''}>NO</option><option value="1" ${bp.out?'selected':''}>OUT</option>
+      </select>
+    </div>`;
+  }).join('');
+
+  const bowlPerfs=r.bowling||[];
+  document.getElementById('bowl-perf-list').innerHTML=activePlayers.map(p=>{
+    const bp=bowlPerfs.find(x=>x.name===p.name)||{};
+    return `<div class="bowl-row perf-row">
+      <span class="perf-row-label">${p.name.split(' ')[0]}</span>
+      <input type="number" min="0" step="0.1" value="${bp.overs||0}" data-p="${p.name}" data-f="overs">
+      <input type="number" min="0" value="${bp.runs||0}" data-p="${p.name}" data-f="bowlRuns">
+      <input type="number" min="0" value="${bp.wkts||0}" data-p="${p.name}" data-f="bowlWkts">
+      <input type="number" min="0" value="${bp.catches||0}" data-p="${p.name}" data-f="catches">
+    </div>`;
+  }).join('');
+
+  document.getElementById('score-overlay').classList.remove('hidden');
+}
+
+function saveScore(){
+  const mid=currentMatchId;
+  const runs=parseInt(document.getElementById('score-runs').value)||0;
+  const wkts=parseInt(document.getElementById('score-wkts').value)||0;
+  const oversPlayed=parseFloat(document.getElementById('score-overs-bat').value)||0;
+  const oppRuns=parseInt(document.getElementById('score-opp-runs').value)||0;
+  const oppWkts=parseInt(document.getElementById('score-opp-wkts').value)||0;
+  const oppOvers=parseFloat(document.getElementById('score-overs-bowl').value)||0;
+  const notes=document.getElementById('score-notes').value;
+
+  const batting=[];
+  document.querySelectorAll('#bat-perf-list .bat-row').forEach(row=>{
+    const inputs=row.querySelectorAll('input,select');
+    const name=inputs[0].dataset.p;
+    batting.push({name,runs:+inputs[0].value,balls:+inputs[1].value,fours:+inputs[2].value,sixes:+inputs[3].value,out:inputs[4].value==='1'});
+  });
+
+  const bowling=[];
+  document.querySelectorAll('#bowl-perf-list .bowl-row').forEach(row=>{
+    const inputs=row.querySelectorAll('input');
+    const name=inputs[0].dataset.p;
+    bowling.push({name,overs:+inputs[0].value,runs:+inputs[1].value,wkts:+inputs[2].value,catches:+inputs[3].value});
+  });
+
+  state.results[mid]={runs,wkts,oversPlayed,oppRuns,oppWkts,oppOvers,notes,batting,bowling};
+  saveState();closeModal('score-overlay');
+  renderHome();if(document.getElementById('page-schedule').classList.contains('active'))renderSchedule();
+}
+
+// ═══════════════════════════════════════════
+// ROSTER / CRICKET STATS
+// ═══════════════════════════════════════════
+function switchRosterTab(tab,el){
+  document.querySelectorAll('.type-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  ['bat','bowl','field'].forEach(t=>document.getElementById('roster-'+t).style.display=t===tab?'block':'none');
+}
+
+function calcCricketStats(){
+  const stats={};
+  PLAYERS.forEach(p=>{stats[p.name]={
+    batInnings:0,notOuts:0,totalRuns:0,balls:0,fours:0,sixes:0,highScore:0,fifties:0,hundreds:0,
+    bowlMatches:0,bowlOvers:0,bowlRuns:0,bowlWkts:0,bestWkts:0,bestRuns:999,
+    catches:0,runOuts:0,stumpings:0
+  };});
+  Object.values(state.results).forEach(r=>{
+    (r.batting||[]).forEach(b=>{
+      const s=stats[b.name];if(!s)return;
+      if(b.balls>0||b.runs>0){
+        s.batInnings++;
+        if(!b.out)s.notOuts++;
+        s.totalRuns+=b.runs;s.balls+=b.balls;s.fours+=b.fours;s.sixes+=b.sixes;
+        if(b.runs>s.highScore)s.highScore=b.runs;
+        if(b.runs>=100)s.hundreds++;else if(b.runs>=50)s.fifties++;
+      }
+    });
+    (r.bowling||[]).forEach(b=>{
+      const s=stats[b.name];if(!s)return;
+      if(b.overs>0||b.wkts>0){
+        s.bowlMatches++;
+        s.bowlOvers+=b.overs;s.bowlRuns+=b.runs;s.bowlWkts+=b.wkts;
+        if(b.wkts>s.bestWkts||(b.wkts===s.bestWkts&&b.runs<s.bestRuns)){s.bestWkts=b.wkts;s.bestRuns=b.runs;}
+      }
+      s.catches+=b.catches||0;
+    });
+  });
+  // Derived
+  Object.values(stats).forEach(s=>{
+    const dism=s.batInnings-s.notOuts;
+    s.batAvg=dism>0?(s.totalRuns/dism).toFixed(1):'—';
+    s.strikeRate=s.balls>0?((s.totalRuns/s.balls)*100).toFixed(1):'—';
+    s.economy=s.bowlOvers>0?(s.bowlRuns/s.bowlOvers).toFixed(2):'—';
+    s.bowlAvg=s.bowlWkts>0?(s.bowlRuns/s.bowlWkts).toFixed(1):'—';
+    s.bowlSR=s.bowlWkts>0?((s.bowlOvers*6)/s.bowlWkts).toFixed(1):'—';
+    s.best=s.bestWkts>0?`${s.bestWkts}/${s.bestRuns===999?0:s.bestRuns}`:'—';
+  });
+  return stats;
+}
+
+function renderRoster(){
+  const stats=calcCricketStats();
+  // BATTING
+  const batSorted=[...PLAYERS].sort((a,b)=>stats[b.name].totalRuns-stats[a.name].totalRuns);
+  document.getElementById('bat-tbody').innerHTML=batSorted.map((p,i)=>{
+    const s=stats[p.name];
+    return `<tr>
+      <td><strong>${p.name}</strong>${p.captain?'<span class="badge captain-badge">C</span>':''}${p.youth?'<span class="badge youth-badge">Y</span>':''}</td>
+      <td>${s.batInnings}</td><td>${s.notOuts}</td>
+      <td class="${s.totalRuns>0?'highlight-val':''}">${s.totalRuns}</td>
+      <td class="${s.highScore>=50?'highlight-gold':''}">${s.highScore}</td>
+      <td class="${parseFloat(s.batAvg)>=30?'highlight-gold':''}">${s.batAvg}</td>
+      <td class="${parseFloat(s.strikeRate)>=120?'highlight-orange':''}">${s.strikeRate}</td>
+      <td>${s.fifties}</td><td>${s.hundreds}</td>
+      <td class="${s.sixes>0?'highlight-orange':''}">${s.sixes}</td>
+    </tr>`;
+  }).join('');
+
+  // BOWLING
+  const bowlSorted=[...PLAYERS].sort((a,b)=>stats[b.name].bowlWkts-stats[a.name].bowlWkts);
+  document.getElementById('bowl-tbody').innerHTML=bowlSorted.map((p,i)=>{
+    const s=stats[p.name];
+    const rc=i===0&&s.bowlWkts>0?'rank-1':i===1&&s.bowlWkts>0?'rank-2':i===2&&s.bowlWkts>0?'rank-3':'';
+    return `<tr class="${rc}">
+      <td><strong>${p.name}</strong>${p.captain?'<span class="badge captain-badge">C</span>':''}</td>
+      <td>${s.bowlMatches}</td>
+      <td>${s.bowlOvers.toFixed(1)}</td>
+      <td>${s.bowlRuns}</td>
+      <td class="${s.bowlWkts>0?'highlight-cyan':''}">${s.bowlWkts}</td>
+      <td class="${s.bestWkts>=3?'highlight-gold':''}">${s.best}</td>
+      <td class="${parseFloat(s.economy)<7?'highlight-green':''}">${s.economy}</td>
+      <td>${s.bowlAvg}</td><td>${s.bowlSR}</td>
+    </tr>`;
+  }).join('');
+
+  // FIELDING
+  const fieldSorted=[...PLAYERS].sort((a,b)=>(stats[b.name].catches+stats[b.name].runOuts)-(stats[a.name].catches+stats[a.name].runOuts));
+  document.getElementById('field-tbody').innerHTML=fieldSorted.map(p=>{
+    const s=stats[p.name];
+    return `<tr><td><strong>${p.name}</strong></td>
+      <td class="${s.catches>0?'highlight-cyan':''}">${s.catches}</td>
+      <td>${s.runOuts}</td><td>${s.stumpings}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════
+let charts={};
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+
+const CHART_OPTS={
+  responsive:true,maintainAspectRatio:true,
+  plugins:{legend:{display:false}},
+  scales:{
+    x:{ticks:{color:'#4a7090',font:{family:'Rajdhani',size:11,weight:'700'}},grid:{color:'#1a2d4a'}},
+    y:{ticks:{color:'#4a7090',font:{family:'Rajdhani',size:11}},grid:{color:'#1a2d4a'},beginAtZero:true}
+  }
+};
+const CHART_OPTS_H={...CHART_OPTS,indexAxis:'y',scales:{
+  x:{...CHART_OPTS.scales.x},
+  y:{ticks:{color:'#E8F4FD',font:{family:'Rajdhani',size:11,weight:'700'}},grid:{display:false}}
+}};
+
+function renderDashboard(){
+  const stats=calcCricketStats();
+  let W=0,L=0,totalRuns=0,scores=[];
+  const matchLabels=[];
+
+  allMatches().forEach(m=>{
+    const r=getResult(m.id);if(!r)return;
+    totalRuns+=r.runs||0;
+    if(r.runs>r.oppRuns)W++;else L++;
+    scores.push(r.runs||0);
+    matchLabels.push(`vs ${m.opponent.split(' ')[0]}`);
+  });
+  const played=W+L;
+  document.getElementById('d-wins').textContent=W;
+  document.getElementById('d-runs').textContent=totalRuns;
+  const allWkts=Object.values(state.results).reduce((s,r)=>{
+    return s+(r.bowling||[]).reduce((a,b)=>a+(b.wkts||0),0);
+  },0);
+  document.getElementById('d-wkts').textContent=allWkts;
+  document.getElementById('d-avg-score').textContent=scores.length?(totalRuns/scores.length).toFixed(0):'—';
+
+  // Chart 1: Top run scorers
+  destroyChart('runs');
+  const topBat=[...PLAYERS].filter(p=>stats[p.name].totalRuns>0).sort((a,b)=>stats[b.name].totalRuns-stats[a.name].totalRuns).slice(0,7);
+  if(topBat.length){
+    charts['runs']=new Chart(document.getElementById('chart-runs'),{
+      type:'bar',
+      data:{labels:topBat.map(p=>p.name.split(' ')[0]),datasets:[{data:topBat.map(p=>stats[p.name].totalRuns),backgroundColor:topBat.map((_,i)=>`hsla(${20+i*8},100%,55%,0.8)`),borderRadius:4}]},
+      options:{...CHART_OPTS_H}
+    });
+  }
+
+  // Chart 2: Top wicket takers
+  destroyChart('wkts');
+  const topBowl=[...PLAYERS].filter(p=>stats[p.name].bowlWkts>0).sort((a,b)=>stats[b.name].bowlWkts-stats[a.name].bowlWkts).slice(0,7);
+  if(topBowl.length){
+    charts['wkts']=new Chart(document.getElementById('chart-wkts'),{
+      type:'bar',
+      data:{labels:topBowl.map(p=>p.name.split(' ')[0]),datasets:[{data:topBowl.map(p=>stats[p.name].bowlWkts),backgroundColor:topBowl.map((_,i)=>`hsla(${185+i*5},100%,55%,0.8)`),borderRadius:4}]},
+      options:{...CHART_OPTS_H}
+    });
+  }
+
+  // Chart 3: Team scores per match
+  destroyChart('scores');
+  if(scores.length){
+    charts['scores']=new Chart(document.getElementById('chart-scores'),{
+      type:'line',
+      data:{labels:matchLabels,datasets:[
+        {label:'HTCECA 2',data:scores,borderColor:'#FF6D00',backgroundColor:'rgba(255,109,0,0.1)',fill:true,tension:0.4,pointBackgroundColor:'#FF6D00',pointRadius:5},
+        {label:'Opponent',data:allMatches().filter(m=>getResult(m.id)).map(m=>getResult(m.id).oppRuns||0),borderColor:'rgba(255,29,68,0.6)',backgroundColor:'rgba(255,29,68,0.05)',fill:true,tension:0.4,pointBackgroundColor:'#FF1744',pointRadius:4}
+      ]},
+      options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:true,labels:{color:'#4a7090',font:{family:'Rajdhani',size:11,weight:'700'}}}},scales:CHART_OPTS.scales}
+    });
+  }
+
+  // Chart 4: Strike rates
+  destroyChart('sr');
+  const topSR=[...PLAYERS].filter(p=>stats[p.name].batInnings>0&&stats[p.name].strikeRate!=='—').sort((a,b)=>parseFloat(stats[b.name].strikeRate)-parseFloat(stats[a.name].strikeRate)).slice(0,7);
+  if(topSR.length){
+    charts['sr']=new Chart(document.getElementById('chart-sr'),{
+      type:'bar',
+      data:{labels:topSR.map(p=>p.name.split(' ')[0]),datasets:[{data:topSR.map(p=>parseFloat(stats[p.name].strikeRate)),backgroundColor:topSR.map(p=>parseFloat(stats[p.name].strikeRate)>=120?'rgba(0,230,118,0.8)':'rgba(0,229,255,0.7)'),borderRadius:4}]},
+      options:{...CHART_OPTS_H}
+    });
+  }
+
+  renderInsights(W,L,played,scores,stats);
+}
+
+function renderInsights(W,L,played,scores,stats){
+  const list=document.getElementById('insights-list');
+  if(played===0){list.innerHTML='<div class="insight"><span class="insight-icon">🏏</span><span class="insight-text">Enter match scorecards to unlock cricket performance insights.</span></div>';return;}
+  const insights=[];
+  const wr=Math.round(W/played*100);
+  insights.push({icon:'📊',text:`<strong>Win rate: ${wr}%</strong> — ${W} wins, ${L} losses from ${played} matches.`});
+
+  const avgScore=scores.length?(scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(0):0;
+  if(avgScore<80)insights.push({icon:'🏏',text:`<strong>Average team score is ${avgScore} runs.</strong> Focus on building partnerships and anchoring innings for higher totals.`});
+  else insights.push({icon:'💪',text:`<strong>Averaging ${avgScore} runs per innings.</strong> Strong batting performance — maintain partnerships under pressure.`});
+
+  const topBat=Object.entries(stats).sort((a,b)=>b[1].totalRuns-a[1].totalRuns)[0];
+  if(topBat&&topBat[1].totalRuns>0)insights.push({icon:'🥇',text:`<strong>${topBat[0]}</strong> leads batting with <strong>${topBat[1].totalRuns} runs</strong> (Avg: ${topBat[1].batAvg}, SR: ${topBat[1].strikeRate}).`});
+
+  const topBowl=Object.entries(stats).sort((a,b)=>b[1].bowlWkts-a[1].bowlWkts)[0];
+  if(topBowl&&topBowl[1].bowlWkts>0)insights.push({icon:'⚡',text:`<strong>${topBowl[0]}</strong> leads bowling with <strong>${topBowl[1].bowlWkts} wickets</strong> (Economy: ${topBowl[1].economy}).`});
+
+  const highEcon=Object.entries(stats).filter(([_,s])=>s.bowlOvers>2&&parseFloat(s.economy)>10);
+  if(highEcon.length)insights.push({icon:'🛡️',text:`<strong>High economy alert:</strong> ${highEcon.map(([n])=>n.split(' ')[0]).join(', ')} conceding over 10 runs/over. Focus on line & length.`});
+
+  const lowSR=Object.entries(stats).filter(([_,s])=>s.batInnings>1&&parseFloat(s.strikeRate)<80);
+  if(lowSR.length)insights.push({icon:'⚠️',text:`<strong>Slow strike rates:</strong> ${lowSR.map(([n])=>n.split(' ')[0]).join(', ')} below 80 SR. Need to rotate strike and find boundaries.`});
+
+  if(L>W)insights.push({icon:'🎯',text:`<strong>More losses than wins.</strong> Work on death-over bowling and consistent fielding to tighten close games.`});
+
+  list.innerHTML=insights.map(i=>`<div class="insight"><span class="insight-icon">${i.icon}</span><span class="insight-text">${i.text}</span></div>`).join('');
+}
+
+// ═══════════════════════════════════════════
+// EDIT LEAGUE MATCH
+// ═══════════════════════════════════════════
+function openEditMatch(mid){
+  const m=allMatches().find(x=>x.id===mid);
+  document.getElementById('edit-match-id').value=mid;
+  document.getElementById('edit-match-date').value=m.date;
+  document.getElementById('edit-match-opp').value=m.opponent;
+  document.getElementById('edit-match-venue').value=m.venue;
+  document.getElementById('edit-match-overs').value=m.overs||20;
+  document.getElementById('edit-match-overlay').classList.remove('hidden');
+}
+function saveMatchOverride(){
+  const mid=document.getElementById('edit-match-id').value;
+  const date=document.getElementById('edit-match-date').value;
+  const opponent=document.getElementById('edit-match-opp').value.trim();
+  const venue=document.getElementById('edit-match-venue').value;
+  const overs=parseInt(document.getElementById('edit-match-overs').value)||20;
+  if(!date||!opponent){alert('Date and opponent are required.');return;}
+  state.matchOverrides[mid]={date,opponent,venue,overs};
+  saveState();
+  closeModal('edit-match-overlay');
+  renderSchedule();renderHome();
+}
+function resetMatchOverride(){
+  const mid=document.getElementById('edit-match-id').value;
+  const orig=BUILTIN_MATCHES.find(m=>m.id===mid);
+  if(!orig)return;
+  document.getElementById('edit-match-date').value=orig.date;
+  document.getElementById('edit-match-opp').value=orig.opponent;
+  document.getElementById('edit-match-venue').value=orig.venue;
+  document.getElementById('edit-match-overs').value=orig.overs||20;
+  delete state.matchOverrides[mid];
+  saveState();
+  closeModal('edit-match-overlay');
+  renderSchedule();renderHome();
+}
+
+// ═══════════════════════════════════════════
+// EDIT PLAYER NAMES
+// ═══════════════════════════════════════════
+function openEditPlayers(){
+  const list=document.getElementById('edit-players-list');
+  list.innerHTML=PLAYERS_BASE.map(p=>{
+    const currentName=state.playerNames[p.id]||p.name;
+    const isCap=PLAYERS.find(x=>x.id===p.id)?.captain||p.captain;
+    const isYouth=PLAYERS.find(x=>x.id===p.id)?.youth||p.youth;
+    return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:0.5rem;align-items:center;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:0.5rem 0.75rem">
+      <input type="text" value="${currentName}" data-pid="${p.id}" placeholder="${p.name}"
+        style="background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--text);font-family:'Rajdhani';font-weight:700;font-size:0.95rem;outline:none;padding:0.2rem 0;transition:border-color .15s"
+        onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='var(--border2)'">
+      <label style="font-size:0.7rem;color:var(--gold);cursor:pointer;display:flex;align-items:center;gap:3px;white-space:nowrap">
+        <input type="checkbox" data-pid="${p.id}" data-flag="captain" ${isCap?'checked':''} style="accent-color:var(--gold)"> C
+      </label>
+      <label style="font-size:0.7rem;color:var(--green);cursor:pointer;display:flex;align-items:center;gap:3px;white-space:nowrap">
+        <input type="checkbox" data-pid="${p.id}" data-flag="youth" ${isYouth?'checked':''} style="accent-color:var(--green)"> Y
+      </label>
+    </div>`;
+  }).join('');
+  document.getElementById('edit-players-overlay').classList.remove('hidden');
+}
+function savePlayerNames(){
+  // Save name overrides
+  document.querySelectorAll('#edit-players-list input[type="text"]').forEach(inp=>{
+    const pid=inp.dataset.pid;
+    const val=inp.value.trim();
+    const orig=PLAYERS_BASE.find(p=>p.id===pid);
+    if(val&&val!==orig.name) state.playerNames[pid]=val;
+    else delete state.playerNames[pid];
+  });
+  // Save captain/youth flags back into PLAYERS
+  document.querySelectorAll('#edit-players-list input[type="checkbox"]').forEach(cb=>{
+    const pid=cb.dataset.pid;
+    const flag=cb.dataset.flag;
+    const player=PLAYERS.find(p=>p.id===pid);
+    if(player) player[flag]=cb.checked;
+  });
+  // Rebuild PLAYERS with new names
+  PLAYERS=PLAYERS_BASE.map(p=>({
+    ...p,
+    name:state.playerNames[p.id]||p.name,
+    captain:PLAYERS.find(x=>x.id===p.id)?.captain??p.captain,
+    youth:PLAYERS.find(x=>x.id===p.id)?.youth??p.youth,
+  }));
+  // Store flags in state too
+  if(!state.playerFlags) state.playerFlags={};
+  PLAYERS.forEach(p=>{state.playerFlags[p.id]={captain:p.captain,youth:p.youth};});
+  saveState();
+  closeModal('edit-players-overlay');
+  // Re-render everything that shows player names
+  renderHome();
+  if(document.getElementById('page-schedule').classList.contains('active'))renderSchedule();
+  if(document.getElementById('page-roster').classList.contains('active'))renderRoster();
+}
+function resetAllPlayerNames(){
+  if(!confirm('Reset all player names to defaults?'))return;
+  state.playerNames={};state.playerFlags={};
+  saveState();
+  PLAYERS=PLAYERS_BASE.map(p=>({...p}));
+  closeModal('edit-players-overlay');
+  renderHome();renderSchedule();
+}
+
+// ═══════════════════════════════════════════
+// ADMIN PIN
+// ═══════════════════════════════════════════
+const ADMIN_PIN_KEY='htceca2_pin';
+let adminUnlocked=false;
+let pinBuffer='';
+
+function isAdminPinSet(){return!!localStorage.getItem(ADMIN_PIN_KEY);}
+function getAdminPin(){return localStorage.getItem(ADMIN_PIN_KEY)||'';}
+
+function toggleAdminModal(){
+  if(adminUnlocked){lockAdmin();return;}
+  pinBuffer='';
+  document.getElementById('pin-error').textContent='';
+  document.getElementById('pin-modal-icon').textContent=isAdminPinSet()?'🔒':'🔑';
+  document.getElementById('pin-modal-title').textContent=isAdminPinSet()?'Admin Login':'Set Admin PIN';
+  document.getElementById('pin-modal-sub').textContent=isAdminPinSet()?'Enter 4-digit PIN to unlock admin features.':'Create a 4-digit PIN to protect admin actions.';
+  renderPinDots();
+  document.getElementById('pin-overlay').classList.remove('hidden');
+}
+function pinPress(d){if(pinBuffer.length>=4)return;pinBuffer+=d;renderPinDots();if(pinBuffer.length===4)setTimeout(submitPin,200);}
+function pinDel(){pinBuffer=pinBuffer.slice(0,-1);renderPinDots();}
+function pinClear(){pinBuffer='';renderPinDots();document.getElementById('pin-error').textContent='';}
+function renderPinDots(){for(let i=0;i<4;i++)document.getElementById('pd'+i).classList.toggle('filled',i<pinBuffer.length);}
+function submitPin(){
+  if(!isAdminPinSet()){localStorage.setItem(ADMIN_PIN_KEY,pinBuffer);unlockAdmin();closeModal('pin-overlay');return;}
+  if(pinBuffer===getAdminPin()){unlockAdmin();closeModal('pin-overlay');}
+  else{document.getElementById('pin-error').textContent='❌ Incorrect PIN';pinBuffer='';renderPinDots();document.getElementById('pin-dots').style.animation='shake 0.4s ease';setTimeout(()=>document.getElementById('pin-dots').style.animation='',500);}
+}
+function unlockAdmin(){
+  adminUnlocked=true;
+  const btn=document.getElementById('nav-lock-btn');
+  btn.textContent='🔓 Admin';btn.style.background='rgba(0,230,118,0.15)';btn.style.borderColor='rgba(0,230,118,0.5)';btn.style.color='var(--green)';
+  const epw=document.getElementById('edit-players-btn-wrap');if(epw)epw.style.display='flex';
+  if(document.getElementById('page-schedule').classList.contains('active'))renderSchedule();
+  renderAdminBar();
+}
+function lockAdmin(){
+  adminUnlocked=false;
+  const btn=document.getElementById('nav-lock-btn');
+  btn.textContent='🔒 Admin';btn.style.background='';btn.style.borderColor='';btn.style.color='';
+  const epw=document.getElementById('edit-players-btn-wrap');if(epw)epw.style.display='none';
+  if(document.getElementById('page-schedule').classList.contains('active'))renderSchedule();
+  renderAdminBar();
+}
+function renderAdminBar(){
+  const el=document.getElementById('home-admin-bar');if(!el)return;
+  if(adminUnlocked){
+    el.innerHTML=`<div class="admin-inline"><span style="font-family:'Rajdhani';font-weight:700;font-size:0.75rem;letter-spacing:2px;color:var(--green)">🔓 ADMIN ON</span><button class="btn btn-outline btn-sm" onclick="lockAdmin()">Lock</button><button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red)" onclick="resetPin()">Reset PIN</button></div>`;
+  } else {
+    el.innerHTML=`<span style="font-family:'Rajdhani';font-weight:700;font-size:0.75rem;letter-spacing:2px;color:var(--muted)">🔒 Score entry locked</span>`;
+  }
+}
+function resetPin(){if(!confirm('Reset admin PIN?'))return;localStorage.removeItem(ADMIN_PIN_KEY);lockAdmin();}
+
+// ═══════════════════════════════════════════
+// WHATSAPP
+// ═══════════════════════════════════════════
+function shareWhatsApp(){document.getElementById('wa-overlay').classList.remove('hidden');}
+function waShare(type){
+  closeModal('wa-overlay');
+  let msg='';
+  const nm=nextMatch();
+  if(type==='next'){
+    if(!nm){msg='HTCECA 2 — No upcoming matches!';}
+    else{
+      const avNames=PLAYERS.filter(p=>(state.availability[nm.id]||{})[p.name]==='A').map(p=>p.name.split(' ')[0]);
+      msg=`🏏 *HTCECA 2 — Next Match*\n\n📅 ${fmtDate(nm.date)}\n🆚 vs ${nm.opponent}\n📍 ${nm.venue} · ${nm.overs||20} overs\n\n✅ *${availCount(nm.id)} available:* ${avNames.join(', ')||'None yet'}\n\nPlease mark your availability! 🙏`;
+    }
+  } else if(type==='results'){
+    const played=allMatches().filter(m=>getResult(m.id));
+    if(!played.length){msg='HTCECA 2 — No results yet.';}
+    else{
+      const lines=played.slice(-5).map(m=>{const r=getResult(m.id);return `${r.runs>r.oppRuns?'✅':'❌'} vs ${m.opponent} — ${r.runs}/${r.wkts} vs ${r.oppRuns}/${r.oppWkts}`;});
+      msg=`🏏 *HTCECA 2 — Recent Results*\n\n${lines.join('\n')}`;
+    }
+  } else if(type==='schedule'){
+    const upcoming=allMatches().filter(m=>{const d=new Date(m.date+'T12:00:00');d.setHours(0,0,0,0);return d>=new Date()&&!getResult(m.id);}).slice(0,6);
+    msg=`📅 *HTCECA 2 — Upcoming*\n\n${upcoming.map(m=>`📅 ${fmtDate(m.date)} vs ${m.opponent} (${m.venue})`).join('\n')||'No upcoming matches!'}`;
+  } else if(type==='standings'){
+    let W=0,L=0,runs=0;
+    allMatches().forEach(m=>{const r=getResult(m.id);if(!r)return;runs+=r.runs||0;if(r.runs>r.oppRuns)W++;else L++;});
+    msg=`🏆 *HTCECA 2 — Season Stats*\n\nPlayed: ${W+L} | Wins: ${W} | Losses: ${L}\nTotal Runs: ${runs}\nWin Rate: ${W+L>0?Math.round(W/(W+L)*100):0}%`;
+  }
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+}
+
+// ═══════════════════════════════════════════
+// PDF EXPORT
+// ═══════════════════════════════════════════
+async function exportPDF(){
+  const btn=event.target;btn.textContent='⏳ Generating...';btn.disabled=true;
+  try{
+    const {jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const pw=doc.internal.pageSize.getWidth();let y=15;
+    doc.setFillColor(4,8,15);doc.rect(0,0,pw,30,'F');
+    doc.setTextColor(0,229,255);doc.setFontSize(20);doc.setFont('helvetica','bold');doc.text('HTCECA 2 — CRICKET REPORT',pw/2,13,{align:'center'});
+    doc.setTextColor(232,244,253);doc.setFontSize(9);doc.setFont('helvetica','normal');doc.text(`Season 2025/26 · Generated ${new Date().toLocaleDateString('en-GB')}`,pw/2,22,{align:'center'});y=38;
+
+    let W=0,L=0,runs=0;const stats=calcCricketStats();
+    allMatches().forEach(m=>{const r=getResult(m.id);if(!r)return;runs+=r.runs||0;if(r.runs>r.oppRuns)W++;else L++;});
+
+    doc.setFillColor(12,21,38);doc.roundedRect(10,y,pw-20,18,2,2,'F');
+    [{l:'Played',v:W+L},{l:'Wins',v:W},{l:'Losses',v:L},{l:'Total Runs',v:runs}].forEach((c,i)=>{
+      const cx=20+(i*(pw-20)/4);doc.setTextColor(0,229,255);doc.setFontSize(14);doc.setFont('helvetica','bold');doc.text(String(c.v),cx,y+10,{align:'left'});
+      doc.setTextColor(74,112,144);doc.setFontSize(7);doc.setFont('helvetica','normal');doc.text(c.l,cx,y+16,{align:'left'});
+    });y+=26;
+
+    doc.setTextColor(0,229,255);doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text('MATCH RESULTS',10,y);y+=6;doc.setDrawColor(26,45,74);doc.line(10,y,pw-10,y);y+=4;
+    ['DATE','OPPONENT','VENUE','OUR SCORE','RESULT'].forEach((h,i)=>{ doc.setTextColor(74,112,144);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text(h,[10,42,82,106,130][i],y);});y+=5;
+    allMatches().forEach(m=>{
+      const r=getResult(m.id);if(y>270){doc.addPage();y=15;}
+      doc.setFillColor(12,21,38);doc.rect(10,y-4,pw-20,7,'F');
+      doc.setTextColor(232,244,253);doc.setFontSize(8);doc.setFont('helvetica','normal');
+      doc.text(fmtDate(m.date),10,y);doc.text(m.opponent.substring(0,20),42,y);doc.text(m.venue,82,y);
+      if(r){doc.text(`${r.runs||0}/${r.wkts||0}`,106,y);if(r.runs>r.oppRuns){doc.setTextColor(0,230,118);doc.text('WON',130,y);}else{doc.setTextColor(255,29,68);doc.text('LOST',130,y);}doc.setTextColor(232,244,253);}
+      else{doc.setTextColor(74,112,144);doc.text('TBD',106,y);}y+=8;
+    });y+=4;
+
+    if(y>240){doc.addPage();y=15;}
+    doc.setTextColor(255,109,0);doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text('BATTING STATS',10,y);y+=6;doc.setDrawColor(26,45,74);doc.line(10,y,pw-10,y);y+=4;
+    ['PLAYER','INN','NO','RUNS','HS','AVG','SR','50s','100s'].forEach((h,i)=>{doc.setTextColor(74,112,144);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text(h,[10,50,62,74,90,104,120,136,148][i],y);});y+=5;
+    [...PLAYERS].sort((a,b)=>stats[b.name].totalRuns-stats[a.name].totalRuns).forEach((p,idx)=>{
+      if(y>270){doc.addPage();y=15;}
+      doc.setFillColor(idx%2===0?12:9,idx%2===0?21:16,idx%2===0?38:30);doc.rect(10,y-4,pw-20,7,'F');
+      const s=stats[p.name];doc.setTextColor(232,244,253);doc.setFont('helvetica','normal');doc.setFontSize(8);
+      doc.text(p.name,10,y);[s.batInnings,s.notOuts,s.totalRuns,s.highScore,s.batAvg,s.strikeRate,s.fifties,s.hundreds].forEach((v,i)=>doc.text(String(v),[50,62,74,90,104,120,136,148][i],y));y+=8;
+    });y+=4;
+
+    if(y>240){doc.addPage();y=15;}
+    doc.setTextColor(0,229,255);doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text('BOWLING STATS',10,y);y+=6;doc.line(10,y,pw-10,y);y+=4;
+    ['PLAYER','OV','RUNS','WKTS','BEST','ECON','AVG'].forEach((h,i)=>{doc.setTextColor(74,112,144);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text(h,[10,55,70,86,100,116,130][i],y);});y+=5;
+    [...PLAYERS].sort((a,b)=>stats[b.name].bowlWkts-stats[a.name].bowlWkts).forEach((p,idx)=>{
+      if(y>270){doc.addPage();y=15;}
+      doc.setFillColor(idx%2===0?12:9,idx%2===0?21:16,idx%2===0?38:30);doc.rect(10,y-4,pw-20,7,'F');
+      const s=stats[p.name];doc.setTextColor(232,244,253);doc.setFont('helvetica','normal');doc.setFontSize(8);
+      doc.text(p.name,10,y);[s.bowlOvers.toFixed(1),s.bowlRuns,s.bowlWkts,s.best,s.economy,s.bowlAvg].forEach((v,i)=>doc.text(String(v),[55,70,86,100,116,130][i],y));y+=8;
+    });
+
+    const pages=doc.internal.getNumberOfPages();
+    for(let i=1;i<=pages;i++){doc.setPage(i);doc.setTextColor(74,112,144);doc.setFontSize(7);doc.text(`HTCECA 2 Cricket Report · Page ${i}/${pages}`,pw/2,293,{align:'center'});}
+    doc.save('HTCECA2_Cricket_Report.pdf');
+  }catch(e){alert('PDF failed.');console.error(e);}
+  btn.textContent='📄 PDF Report';btn.disabled=false;
+}
+
+function closeModal(id){document.getElementById(id).classList.add('hidden');}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+loadState();
+renderHome();
+renderAdminBar();
+</script>
+</body>
+</html>

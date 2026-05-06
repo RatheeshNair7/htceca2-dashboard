@@ -8,99 +8,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <!-- Firebase SDK -->
-<script type="module">
-// ══════════════════════════════════════════════════════
-//  🔥 FIREBASE CONFIG — REPLACE WITH YOUR OWN VALUES
-//  See setup guide shown on the website (🔥 DB Setup tab)
-// ══════════════════════════════════════════════════════
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getFirestore, doc, onSnapshot, setDoc, getDoc }
-  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-
-const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyCCl1wpqHHySS74Fw9W0R6hZGU0GuoCQM8",
-  authDomain:        "htceca2-8e36e.firebaseapp.com",
-  projectId:         "htceca2-8e36e",
-  storageBucket:     "htceca2-8e36e.firebasestorage.app",
-  messagingSenderId: "1060749243430",
-  appId:             "1:1060749243430:web:4077d2928b960a96c5e2e7"
-};
-
-const DB_COLLECTION = 'htceca2';
-const DB_DOC        = 'teamdata';
-
-let db = null;
-let fbUnsubscribe = null;
-let fbReady = false;
-
-function isFirebaseConfigured(){
-  return FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.includes('PASTE_YOUR');
-}
-
-async function initFirebase(){
-  if(!isFirebaseConfigured()){
-    setDbStatus('offline','🔴 Not connected — using local only. Set up Firebase to share with teammates.');
-    return;
-  }
-  try{
-    const app = initializeApp(FIREBASE_CONFIG);
-    db = getFirestore(app);
-    setDbStatus('connecting','🟡 Connecting to database…');
-
-    // Real-time listener — fires whenever ANY teammate saves
-    fbUnsubscribe = onSnapshot(doc(db, DB_COLLECTION, DB_DOC), (snap)=>{
-      if(snap.exists()){
-        const remote = snap.data();
-        // Merge remote into state (remote is always source of truth)
-        Object.assign(state, remote);
-        if(!Array.isArray(state.extraMatches))state.extraMatches=[];
-        ['playerNames','playerFlags','matchOverrides','stats2025','selections','availability','results'].forEach(k=>{if(!state[k])state[k]={};});
-        rebuildPlayers();
-        // Re-render whichever page is active
-        const active = document.querySelector('.page.active')?.id?.replace('page-','');
-        if(active==='home')renderHome();
-        else if(active==='schedule')renderSchedule();
-        else if(active==='roster')renderRoster();
-        else if(active==='selection')renderSelectionPage();
-        else if(active==='dashboard')renderDashboard();
-        setDbStatus('online','🟢 Live — syncing with teammates in real-time');
-      }
-      fbReady = true;
-    }, (err)=>{
-      console.error('Firestore listener error:', err);
-      setDbStatus('offline','🔴 DB error: '+err.message);
-    });
-
-  }catch(e){
-    console.error('Firebase init error:', e);
-    setDbStatus('offline','🔴 Firebase error: '+e.message);
-  }
-}
-
-// Expose to window so rest of script can call it
-window.fbSaveState = async function(){
-  // Always save to localStorage as offline fallback
-  localStorage.setItem('htceca2_v3', JSON.stringify(state));
-  if(!db || !isFirebaseConfigured()) return;
-  try{
-    await setDoc(doc(db, DB_COLLECTION, DB_DOC), state);
-  }catch(e){
-    console.error('Firebase save error:', e);
-    setDbStatus('offline','🔴 Save failed: '+e.message);
-  }
-};
-
-function setDbStatus(type, msg){
-  const el = document.getElementById('db-status');
-  if(!el) return;
-  const colors = {online:'var(--green)', offline:'#ff6b6b', connecting:'var(--gold)'};
-  el.style.color = colors[type]||'var(--muted)';
-  el.textContent = msg;
-}
-
-// Start Firebase
-initFirebase();
-</script>
 <style>
 :root{
   --bg:#04080F;--dark:#080E1A;--card:#0C1526;--card2:#101D30;
@@ -378,6 +285,128 @@ canvas{max-height:210px}
   .scorecard-header{grid-template-columns:1fr}
 }
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
+
+/* ── INLINE EDIT MODE ── */
+.edit-mode-active [data-editable]{
+  position:relative;outline:1.5px dashed rgba(0,229,255,0.45);outline-offset:2px;border-radius:2px;
+  cursor:pointer!important;transition:outline-color .15s,background .15s;
+}
+.edit-mode-active [data-editable]:hover{
+  outline-color:var(--cyan);background:rgba(0,229,255,0.07);
+}
+.edit-mode-active [data-editable]::after{
+  content:'✏️';position:absolute;top:-10px;right:-8px;font-size:0.6rem;opacity:0;transition:opacity .15s;pointer-events:none;z-index:10;
+}
+.edit-mode-active [data-editable]:hover::after{opacity:1;}
+.edit-mode-active [data-editable].just-saved{outline-color:var(--green)!important;background:rgba(0,230,118,0.08)!important;}
+
+/* EDIT POPOVER */
+.edit-popover{
+  position:fixed;z-index:9999;
+  background:var(--card);border:1px solid var(--cyan);border-radius:8px;
+  padding:0.85rem 1rem;width:340px;max-width:94vw;
+  box-shadow:0 0 30px rgba(0,229,255,0.2),0 8px 32px rgba(0,0,0,0.5);
+  animation:popIn .18s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes popIn{from{opacity:0;transform:scale(0.92) translateY(4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.edit-popover-label{font-family:'Rajdhani';font-weight:700;font-size:0.65rem;letter-spacing:3px;text-transform:uppercase;color:var(--cyan);margin-bottom:0.4rem;display:flex;align-items:center;gap:0.4rem}
+.edit-popover textarea{
+  width:100%;background:var(--card2);border:1px solid var(--border);color:var(--text);
+  padding:0.55rem 0.7rem;font-family:'Rajdhani';font-weight:600;font-size:0.92rem;
+  border-radius:var(--radius);outline:none;resize:vertical;min-height:52px;max-height:200px;
+  transition:border-color .15s;line-height:1.45;
+}
+.edit-popover textarea:focus{border-color:var(--cyan);}
+.edit-popover-btns{display:flex;justify-content:flex-end;gap:0.4rem;margin-top:0.55rem}
+.ep-btn{font-family:'Rajdhani';font-weight:700;font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;padding:0.3rem 0.8rem;border:none;cursor:pointer;border-radius:3px;transition:all .12s}
+.ep-save{background:var(--cyan);color:#000;}
+.ep-save:hover{background:#33EEFF;}
+.ep-cancel{background:transparent;border:1px solid var(--border2);color:var(--muted);}
+.ep-cancel:hover{border-color:var(--red);color:var(--red);}
+.ep-reset{background:transparent;border:1px solid var(--border2);color:var(--muted);margin-right:auto}
+.ep-reset:hover{border-color:var(--orange);color:var(--orange);}
+
+/* EDIT MODE TOGGLE BAR */
+.edit-mode-bar{
+  position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:400;
+  background:var(--card);border:1px solid var(--border2);border-radius:50px;
+  padding:0.5rem 1.25rem;display:flex;align-items:center;gap:1rem;
+  box-shadow:0 4px 30px rgba(0,0,0,0.5),0 0 0 1px rgba(0,229,255,0.1);
+  backdrop-filter:blur(12px);transition:all .25s;
+  display:none; /* shown only when admin unlocked */
+}
+.edit-mode-bar.edit-on{border-color:rgba(0,229,255,0.5);box-shadow:0 4px 30px rgba(0,0,0,0.5),0 0 20px rgba(0,229,255,0.15);}
+.emb-label{font-family:'Rajdhani';font-weight:700;font-size:0.72rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.emb-label.on{color:var(--cyan)}
+.emb-toggle{width:42px;height:24px;background:var(--card2);border:1px solid var(--border);border-radius:12px;position:relative;cursor:pointer;transition:background .2s,border-color .2s}
+.emb-toggle.active{background:rgba(0,229,255,0.25);border-color:var(--cyan);}
+.emb-toggle-knob{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--muted);transition:transform .2s,background .2s}
+.emb-toggle.active .emb-toggle-knob{transform:translateX(18px);background:var(--cyan);}
+.emb-count{font-family:'Bebas Neue';font-size:0.9rem;letter-spacing:1px;color:var(--muted);font-size:0.75rem;font-family:'Rajdhani';font-weight:700}
+.emb-count.has-edits{color:var(--green);}
+
+@media(max-width:900px){.edit-mode-bar{bottom:0.75rem;padding:0.45rem 1rem;gap:0.75rem}}
+.goals-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem;margin-bottom:2rem}
+.goal-pillar{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;position:relative}
+.goal-pillar::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.gp-bat::before{background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.gp-bowl::before{background:linear-gradient(90deg,transparent,var(--cyan),transparent)}
+.gp-field::before{background:linear-gradient(90deg,transparent,var(--green),transparent)}
+.goal-pillar-header{padding:1rem 1.25rem 0.75rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:0.75rem}
+.goal-pillar-icon{font-size:1.5rem;line-height:1}
+.goal-pillar-title{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:2px}
+.goal-pillar-sub{font-size:0.7rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-top:1px}
+.goal-rows{display:flex;flex-direction:column}
+.goal-row{padding:0.8rem 1.25rem;border-bottom:1px solid var(--border);transition:background .15s}
+.goal-row:last-child{border-bottom:none}
+.goal-row:hover{background:rgba(255,255,255,0.02)}
+.goal-row-top{display:flex;align-items:baseline;gap:0.6rem;margin-bottom:0.3rem;flex-wrap:wrap}
+.goal-order{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;padding:2px 7px;border-radius:2px;flex-shrink:0}
+.go-top{background:rgba(255,214,0,0.15);color:var(--gold)}
+.go-mid{background:rgba(0,229,255,0.12);color:var(--cyan)}
+.go-lower{background:rgba(255,109,0,0.12);color:var(--orange)}
+.go-fast{background:rgba(255,29,68,0.12);color:#ff6b6b}
+.go-slow{background:rgba(213,0,249,0.12);color:var(--purple)}
+.go-all{background:rgba(0,230,118,0.12);color:var(--green)}
+.goal-target{font-family:'Bebas Neue',sans-serif;font-size:1.25rem;letter-spacing:1px;color:var(--text);line-height:1}
+.goal-players{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:0.8rem;color:var(--muted);line-height:1.4;margin-top:0.15rem}
+.goal-players strong{color:var(--text);font-weight:700}
+.goal-alert{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin-top:0.1rem}
+
+/* BIG TARGET BANNER */
+.goal-banner{background:linear-gradient(135deg,rgba(0,229,255,0.07),rgba(255,109,0,0.05));border:1px solid rgba(0,229,255,0.2);border-radius:var(--radius);padding:1.1rem 1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap}
+.goal-banner-num{font-family:'Bebas Neue',sans-serif;font-size:3.5rem;letter-spacing:2px;line-height:1;color:var(--cyan);text-shadow:0 0 20px rgba(0,229,255,0.4);flex-shrink:0}
+.goal-banner-label{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:1rem;letter-spacing:1px}
+.goal-banner-sub{font-size:0.82rem;color:var(--muted);font-weight:500;margin-top:0.2rem}
+
+/* FIELD DIAGRAM */
+.field-section{margin-top:2rem}
+.field-wrap{display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap}
+.field-diagram{position:relative;width:340px;height:340px;flex-shrink:0;margin:0 auto}
+.field-circle-outer{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at center,#1a4a1a 0%,#0f3010 40%,#0a2008 100%);border:2px dashed rgba(255,255,255,0.2)}
+.field-circle-inner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:150px;height:150px;border-radius:50%;border:1.5px dashed rgba(255,255,255,0.18);background:rgba(0,0,0,0.15)}
+.pitch{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:18px;height:80px;background:rgba(255,220,150,0.3);border:1px solid rgba(255,220,150,0.5);border-radius:2px}
+.pitch::before,.pitch::after{content:'';position:absolute;left:-4px;right:-4px;height:3px;background:rgba(255,255,255,0.6);border-radius:1px}
+.pitch::before{top:-1px}
+.pitch::after{bottom:-1px}
+.end-label{position:absolute;left:50%;transform:translateX(-50%);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.55rem;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.3)}
+.end-label.top{top:6px}
+.end-label.bot{bottom:6px}
+.fielder-dot{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;cursor:default}
+.fdot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+.fdot-out{background:radial-gradient(circle at 35% 35%,#ffcc44,#ff8800);box-shadow:0 0 6px rgba(255,150,0,0.7)}
+.fdot-in{background:radial-gradient(circle at 35% 35%,#44ccff,#0088ff);box-shadow:0 0 6px rgba(0,150,255,0.7)}
+.fdot-wk{background:radial-gradient(circle at 35% 35%,#ee44ff,#aa00cc);box-shadow:0 0 6px rgba(213,0,249,0.7)}
+.fdot-bowler{background:radial-gradient(circle at 35% 35%,#44ff88,#00aa44);box-shadow:0 0 8px rgba(0,200,100,0.8)}
+.fpos{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.52rem;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.7);text-align:center;white-space:nowrap;line-height:1.1}
+.fname{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.55rem;color:var(--gold);text-align:center;white-space:nowrap;line-height:1}
+.field-legend{flex:1;min-width:220px}
+.field-legend-title{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;margin-bottom:1rem;color:var(--text)}
+.field-pos-list{display:flex;flex-direction:column;gap:0.4rem}
+.fpl-row{display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.85rem;background:var(--card2);border:1px solid var(--border);border-radius:3px}
+.fpl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.fpl-pos{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.78rem;letter-spacing:1px;width:100px;flex-shrink:0}
+.fpl-name{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:0.78rem;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -393,12 +422,9 @@ canvas{max-height:210px}
     <div class="nav-tab" data-page="roster" onclick="showPage('roster')">Stats</div>
     <div class="nav-tab" data-page="selection" onclick="showPage('selection')">Selection</div>
     <div class="nav-tab" data-page="dashboard" onclick="showPage('dashboard')">Dashboard</div>
-    <div class="nav-tab" data-page="dbsetup" onclick="showPage('dbsetup')" style="color:var(--orange)">🔥 DB Setup</div>
+    <div class="nav-tab" data-page="goals" onclick="showPage('goals')">🎯 Goals</div>
   </div>
-  <div style="display:flex;align-items:center;gap:0.75rem">
-    <span id="db-status" style="font-family:'Rajdhani';font-weight:700;font-size:0.65rem;letter-spacing:1px;color:var(--muted);white-space:nowrap">🔴 Local only</span>
-    <button class="btn-lock" onclick="toggleAdminModal()" id="nav-lock-btn">🔒 Admin</button>
-  </div>
+  <button class="btn-lock" onclick="toggleAdminModal()" id="nav-lock-btn">🔒 Admin</button>
 </nav>
 
 <!-- ══ HOME ══ -->
@@ -435,9 +461,9 @@ canvas{max-height:210px}
 <!-- ══ SCHEDULE ══ -->
 <div class="page" id="page-schedule">
   <div class="page-header">
-    <div class="page-eyebrow">Full Calendar</div>
-    <h1 class="page-title">Schedule</h1>
-    <p class="page-sub">All matches. Mark availability or enter full cricket scorecards.</p>
+    <div class="page-eyebrow" data-editable="sched-eyebrow">Full Calendar</div>
+    <h1 class="page-title" data-editable="sched-title">Schedule</h1>
+    <p class="page-sub" data-editable="sched-sub">All matches. Mark availability or enter full cricket scorecards.</p>
   </div>
 
   <div class="legend">
@@ -478,9 +504,9 @@ canvas{max-height:210px}
 <!-- ══ STATS ══ -->
 <div class="page" id="page-roster">
   <div class="page-header">
-    <div class="page-eyebrow">Player Statistics</div>
-    <h1 class="page-title">Cricket Stats</h1>
-    <p class="page-sub">2025 historical season stats alongside live 2026 stats from scorecards.</p>
+    <div class="page-eyebrow" data-editable="roster-eyebrow">Player Statistics</div>
+    <h1 class="page-title" data-editable="roster-title">Cricket Stats</h1>
+    <p class="page-sub" data-editable="roster-sub">2025 historical season stats alongside live 2026 stats from scorecards.</p>
   </div>
 
   <div class="season-tabs">
@@ -534,9 +560,9 @@ canvas{max-height:210px}
 <!-- ══ TEAM SELECTION ══ -->
 <div class="page" id="page-selection">
   <div class="page-header">
-    <div class="page-eyebrow">Match Day</div>
-    <h1 class="page-title">Team Selection</h1>
-    <p class="page-sub">Admin-only: pick playing XI, substitutes and assign roles.</p>
+    <div class="page-eyebrow" data-editable="sel-eyebrow">Match Day</div>
+    <h1 class="page-title" data-editable="sel-title">Team Selection</h1>
+    <p class="page-sub" data-editable="sel-sub">Admin-only: pick playing XI, substitutes and assign roles.</p>
   </div>
 
   <div id="selection-lock-notice" class="admin-lock-notice" style="display:none">
@@ -600,9 +626,9 @@ canvas{max-height:210px}
 <!-- ══ DASHBOARD ══ -->
 <div class="page" id="page-dashboard">
   <div class="page-header">
-    <div class="page-eyebrow">Performance Intelligence</div>
-    <h1 class="page-title">Dashboard</h1>
-    <p class="page-sub">Cricket analytics, trends & improvement insights.</p>
+    <div class="page-eyebrow" data-editable="dash-eyebrow">Performance Intelligence</div>
+    <h1 class="page-title" data-editable="dash-title">Dashboard</h1>
+    <p class="page-sub" data-editable="dash-sub">Cricket analytics, trends & improvement insights.</p>
   </div>
 
   <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
@@ -613,17 +639,325 @@ canvas{max-height:210px}
   </div>
 
   <div class="charts-grid">
-    <div class="chart-card cc-orange"><div class="chart-title">🏏 Top Run Scorers</div><canvas id="chart-runs"></canvas></div>
-    <div class="chart-card cc-cyan"><div class="chart-title">⚡ Top Wicket Takers</div><canvas id="chart-wkts"></canvas></div>
-    <div class="chart-card cc-gold"><div class="chart-title">📈 Team Score Per Match</div><canvas id="chart-scores"></canvas></div>
-    <div class="chart-card cc-green"><div class="chart-title">⭐ Strike Rates (2026)</div><canvas id="chart-sr"></canvas></div>
+    <div class="chart-card cc-orange"><div class="chart-title" data-editable="chart-runs-title">🏏 Top Run Scorers</div><canvas id="chart-runs"></canvas></div>
+    <div class="chart-card cc-cyan"><div class="chart-title" data-editable="chart-wkts-title">⚡ Top Wicket Takers</div><canvas id="chart-wkts"></canvas></div>
+    <div class="chart-card cc-gold"><div class="chart-title" data-editable="chart-scores-title">📈 Team Score Per Match</div><canvas id="chart-scores"></canvas></div>
+    <div class="chart-card cc-green"><div class="chart-title" data-editable="chart-sr-title">⭐ Strike Rates (2026)</div><canvas id="chart-sr"></canvas></div>
   </div>
 
   <div class="card">
-    <div class="chart-title" style="color:var(--cyan)">🔍 Team Insights & Improvement Areas</div>
+    <div class="chart-title" style="color:var(--cyan)" data-editable="insights-title">🔍 Team Insights & Improvement Areas</div>
     <div class="insight-list" id="insights-list">
       <div class="insight"><span class="insight-icon">🏏</span><span class="insight-text">Enter match scorecards to unlock cricket performance insights.</span></div>
     </div>
+  </div>
+</div>
+
+<!-- ══ TEAM GOALS & RESPONSIBILITIES ══ -->
+<div class="page" id="page-goals">
+  <div class="page-header">
+    <div class="page-eyebrow" data-editable="goals-eyebrow">Strategy & Roles</div>
+    <h1 class="page-title" data-editable="goals-title">Team Goals & Responsibilities</h1>
+    <p class="page-sub" data-editable="goals-sub">Season targets, player responsibilities and field positions for every match.</p>
+  </div>
+
+  <!-- MASTER TARGETS -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:2rem">
+    <div class="goal-banner" style="flex-direction:column;align-items:flex-start;padding:1.1rem 1.25rem">
+      <div style="font-size:1.5rem;margin-bottom:0.25rem">🏏</div>
+      <div style="font-family:'Bebas Neue';font-size:2rem;letter-spacing:2px;color:var(--gold);line-height:1">25 OVERS</div>
+      <div style="font-family:'Rajdhani';font-weight:700;font-size:0.75rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-top:0.2rem">Batting Target</div>
+    </div>
+    <div class="goal-banner" style="flex-direction:column;align-items:flex-start;padding:1.1rem 1.25rem">
+      <div style="font-size:1.5rem;margin-bottom:0.25rem">⚡</div>
+      <div style="font-family:'Bebas Neue';font-size:2rem;letter-spacing:2px;color:var(--cyan);line-height:1">&lt;200 RUNS</div>
+      <div style="font-family:'Rajdhani';font-weight:700;font-size:0.75rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-top:0.2rem">Bowling Target — Concede</div>
+    </div>
+    <div class="goal-banner" style="flex-direction:column;align-items:flex-start;padding:1.1rem 1.25rem">
+      <div style="font-size:1.5rem;margin-bottom:0.25rem">🧤</div>
+      <div style="font-family:'Bebas Neue';font-size:2rem;letter-spacing:2px;color:var(--green);line-height:1">ZERO ERRORS</div>
+      <div style="font-family:'Rajdhani';font-weight:700;font-size:0.75rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-top:0.2rem">Fielding Standard</div>
+    </div>
+  </div>
+
+  <!-- THREE PILLARS -->
+  <div class="goals-grid">
+
+    <!-- BATTING -->
+    <div class="goal-pillar gp-bat">
+      <div class="goal-pillar-header">
+        <span class="goal-pillar-icon">🏏</span>
+        <div>
+          <div class="goal-pillar-title" style="color:var(--gold)">Batting</div>
+          <div class="goal-pillar-sub">Partnerships & Targets</div>
+        </div>
+      </div>
+      <div class="goal-rows">
+        <div class="goal-row">
+          <div class="goal-row-top">
+            <span class="goal-order go-top">Top Order</span>
+            <span class="goal-target" data-editable="bat-goal-1">Bat 25 Overs</span>
+          </div>
+          <div class="goal-players" data-editable="bat-players-1"><strong>Prashant, Lakshay, Sagar, Varun / Ratheesh</strong></div>
+        </div>
+        <div class="goal-row">
+          <div class="goal-row-top">
+            <span class="goal-order go-top">Top Order</span>
+            <span class="goal-target" data-editable="bat-goal-2">2 × 50+ Partnerships</span>
+          </div>
+          <div class="goal-players" data-editable="bat-players-2"><strong>Prashant, Lakshay, Sagar, Varun / Ratheesh</strong></div>
+        </div>
+        <div class="goal-row">
+          <div class="goal-row-top">
+            <span class="goal-order go-top">Top Order</span>
+            <span class="goal-target" data-editable="bat-goal-3">1 × 30+ Partnership</span>
+          </div>
+          <div class="goal-players"><strong>Prashant, Lakshay, Sagar, Varun / Ratheesh</strong></div>
+        </div>
+        <div class="goal-row">
+          <div class="goal-row-top">
+            <span class="goal-order go-mid">Middle Order</span>
+            <span class="goal-target" data-editable="bat-goal-4">2 × 30+ Partnerships</span>
+          </div>
+          <div class="goal-players" data-editable="bat-players-4"><strong>Ratheesh / Sharada, Ambati, Mohan</strong></div>
+        </div>
+        <div class="goal-row">
+          <div class="goal-row-top">
+            <span class="goal-order go-lower">Lower Middle</span>
+            <span class="goal-target" data-editable="bat-goal-5">2 × 20+ Partnerships</span>
+          </div>
+          <div class="goal-players" data-editable="bat-players-5"><strong>Abdul, Ragul, Avinash, Rogith, Deepan</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOWLING -->
+    <div class="goal-pillar gp-bowl">
+      <div class="goal-pillar-header">
+        <span class="goal-pillar-icon">⚡</span>
+        <div>
+          <div class="goal-pillar-title" style="color:var(--cyan)">Bowling</div>
+          <div class="goal-pillar-sub">Economy Targets</div>
+        </div>
+      </div>
+      <div class="goal-rows">
+        <div class="goal-row" style="background:rgba(0,229,255,0.04);border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
+            <span class="goal-order go-all">Team Goal</span>
+            <span style="font-family:'Bebas Neue';font-size:1.2rem;letter-spacing:1px;color:var(--cyan)">Concede &lt; 200 Runs</span>
+          </div>
+        </div>
+        <div class="goal-row">
+          <div class="goal-row-top">
+            <span class="goal-order go-fast">Fast Bowlers</span>
+            <span class="goal-target" data-editable="bowl-fast-target">Economy &lt; 5</span>
+          </div>
+          <div class="goal-players" data-editable="bowl-fast-players"><strong>Mohan, Ragul, Rogith</strong></div>
+        </div>
+        <div class="goal-row">
+          <div class="goal-row-top">
+            <span class="goal-order go-slow">Slow Bowlers</span>
+            <span class="goal-target" data-editable="bowl-slow-target">Economy &lt; 6</span>
+          </div>
+          <div class="goal-players" data-editable="bowl-slow-players"><strong>Avinash, Deepan, Prashant, Lakshay, Ratheesh</strong></div>
+        </div>
+        <div class="goal-row" style="background:rgba(255,29,68,0.04)">
+          <div style="font-family:'Rajdhani';font-weight:700;font-size:0.78rem;letter-spacing:1px;color:#ff6b6b;display:flex;align-items:center;gap:0.5rem">
+            <span>⚠️</span> Dot balls win matches — bowl to your plans
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIELDING -->
+    <div class="goal-pillar gp-field">
+      <div class="goal-pillar-header">
+        <span class="goal-pillar-icon">🧤</span>
+        <div>
+          <div class="goal-pillar-title" style="color:var(--green)">Fielding</div>
+          <div class="goal-pillar-sub">Standards & Positions</div>
+        </div>
+      </div>
+      <div class="goal-rows">
+        <div class="goal-row">
+          <div class="goal-row-top">
+            <span class="goal-alert">Zero Tolerance</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.3rem">
+            <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;font-weight:600">
+              <span style="color:var(--red)">✗</span> <span>Catch misses</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;font-weight:600">
+              <span style="color:var(--red)">✗</span> <span>Throws unbacked up</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;font-weight:600">
+              <span style="color:var(--red)">✗</span> <span>Misfields</span>
+            </div>
+          </div>
+        </div>
+        <div class="goal-row">
+          <div class="goal-row-top">
+            <span class="goal-order go-out" style="background:rgba(255,109,0,0.12);color:var(--orange)">Out Fielders</span>
+          </div>
+          <div class="goal-players" data-editable="field-out-players"><strong>Rogith, Ambati, Sagar, Prashant, Ragul / Sharada, Abdul</strong></div>
+        </div>
+        <div class="goal-row">
+          <div class="goal-row-top">
+            <span class="goal-order go-in" style="background:rgba(0,229,255,0.12);color:var(--cyan)">Inner Circle</span>
+          </div>
+          <div class="goal-players" data-editable="field-in-players"><strong>Ratheesh, Varun, Lakshay, Mohan, Sharada / Ragul</strong></div>
+        </div>
+        <div class="goal-row" style="background:rgba(0,230,118,0.04)">
+          <div style="font-family:'Rajdhani';font-weight:700;font-size:0.78rem;letter-spacing:1px;color:var(--green);display:flex;align-items:center;gap:0.5rem">
+            <span>✅</span> Always attempt catches — even half chances!
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /goals-grid -->
+
+  <!-- FIELD PLACEMENT DIAGRAM -->
+  <div class="field-section">
+    <div class="section-divider">🟢 Field Placement</div>
+    <div class="field-wrap">
+
+      <!-- SVG DIAGRAM -->
+      <div class="field-diagram">
+        <!-- Outer circle -->
+        <svg viewBox="0 0 340 340" style="position:absolute;inset:0;width:100%;height:100%">
+          <!-- Outfield -->
+          <circle cx="170" cy="170" r="165" fill="#0f3010" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" stroke-dasharray="6 4"/>
+          <!-- Inner circle -->
+          <circle cx="170" cy="170" r="75" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1.2" stroke-dasharray="5 4"/>
+          <!-- Pitch -->
+          <rect x="163" y="130" width="14" height="80" fill="rgba(255,220,150,0.25)" stroke="rgba(255,220,150,0.5)" stroke-width="1" rx="2"/>
+          <!-- Crease lines -->
+          <line x1="159" y1="148" x2="181" y2="148" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>
+          <line x1="159" y1="192" x2="181" y2="192" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>
+          <!-- Ball -->
+          <circle cx="170" cy="170" r="4" fill="#cc2200" stroke="#ff4422" stroke-width="1"/>
+          <!-- End labels -->
+          <text x="170" y="14" text-anchor="middle" font-family="Rajdhani" font-weight="700" font-size="9" letter-spacing="3" fill="rgba(255,255,255,0.3)">BOWLING END</text>
+          <text x="170" y="333" text-anchor="middle" font-family="Rajdhani" font-weight="700" font-size="9" letter-spacing="3" fill="rgba(255,255,255,0.3)">BATTING END</text>
+        </svg>
+
+        <!-- Fielder dots — positioned as percentages of 340px -->
+        <!-- WK: Ratheesh — just behind stumps batting end -->
+        <div class="fielder-dot" style="left:50%;top:66%">
+          <div class="fdot fdot-wk"></div>
+          <div class="fpos">Wicket Keeper</div>
+          <div class="fname" data-editable="fpos-wk">Ratheesh</div>
+        </div>
+        <!-- Bowler: Mohan — centre top -->
+        <div class="fielder-dot" style="left:50%;top:36%">
+          <div class="fdot fdot-bowler"></div>
+          <div class="fpos">Bowler</div>
+          <div class="fname" data-editable="fpos-bowler">Mohan</div>
+        </div>
+        <!-- Mid On: Ragul/Abdul — left of bowler -->
+        <div class="fielder-dot" style="left:26%;top:30%">
+          <div class="fdot fdot-in"></div>
+          <div class="fpos">Mid On</div>
+          <div class="fname" data-editable="fpos-midon">Ragul/Abdul</div>
+        </div>
+        <!-- Mid Off: Rogith — right of bowler -->
+        <div class="fielder-dot" style="left:74%;top:30%">
+          <div class="fdot fdot-out"></div>
+          <div class="fpos">Mid Off</div>
+          <div class="fname" data-editable="fpos-midoff">Rogith</div>
+        </div>
+        <!-- Cover: Ragul/Lakshay — mid-right -->
+        <div class="fielder-dot" style="left:80%;top:43%">
+          <div class="fdot fdot-out"></div>
+          <div class="fpos">Cover</div>
+          <div class="fname" data-editable="fpos-cover">Ragul/Lakshay</div>
+        </div>
+        <!-- Point: Sharada/Lakshay — right side -->
+        <div class="fielder-dot" style="left:84%;top:57%">
+          <div class="fdot fdot-in"></div>
+          <div class="fpos">Point</div>
+          <div class="fname" data-editable="fpos-point">Sharada/Lakshay</div>
+        </div>
+        <!-- Gully: Varun — right of keeper -->
+        <div class="fielder-dot" style="left:78%;top:68%">
+          <div class="fdot fdot-in"></div>
+          <div class="fpos">Gully</div>
+          <div class="fname" data-editable="fpos-gully">Varun</div>
+        </div>
+        <!-- 1st Slip: Prashant -->
+        <div class="fielder-dot" style="left:64%;top:74%">
+          <div class="fdot fdot-out"></div>
+          <div class="fpos">1st Slip</div>
+          <div class="fname" data-editable="fpos-slip1">Prashant</div>
+        </div>
+        <!-- 2nd Slip: Avinash -->
+        <div class="fielder-dot" style="left:69%;top:79%">
+          <div class="fdot fdot-out"></div>
+          <div class="fpos">2nd Slip</div>
+          <div class="fname" data-editable="fpos-slip2">Avinash</div>
+        </div>
+        <!-- Square Leg: Sagar — left side -->
+        <div class="fielder-dot" style="left:16%;top:57%">
+          <div class="fdot fdot-out"></div>
+          <div class="fpos">Square Leg</div>
+          <div class="fname" data-editable="fpos-sqleg">Sagar</div>
+        </div>
+        <!-- Deep 3rd Man: Ambati — far right corner -->
+        <div class="fielder-dot" style="left:82%;top:84%">
+          <div class="fdot fdot-out"></div>
+          <div class="fpos">Deep 3rd Man</div>
+          <div class="fname" data-editable="fpos-3rdman">Ambati</div>
+        </div>
+      </div>
+
+      <!-- LEGEND LIST -->
+      <div class="field-legend">
+        <div class="field-legend-title">Position Assignments</div>
+        <div style="display:flex;gap:0.75rem;margin-bottom:0.85rem;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.72rem;font-weight:600;color:var(--muted)"><div style="width:9px;height:9px;border-radius:50%;background:#00aa44;box-shadow:0 0 5px rgba(0,180,80,0.6)"></div> Bowler</div>
+          <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.72rem;font-weight:600;color:var(--muted)"><div style="width:9px;height:9px;border-radius:50%;background:#aa00cc;box-shadow:0 0 5px rgba(213,0,249,0.5)"></div> Wicket Keeper</div>
+          <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.72rem;font-weight:600;color:var(--muted)"><div style="width:9px;height:9px;border-radius:50%;background:#0088ff;box-shadow:0 0 5px rgba(0,150,255,0.5)"></div> Inner Circle</div>
+          <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.72rem;font-weight:600;color:var(--muted)"><div style="width:9px;height:9px;border-radius:50%;background:#ff8800;box-shadow:0 0 5px rgba(255,150,0,0.5)"></div> Out Fielder</div>
+        </div>
+        <div class="field-pos-list">
+          <div class="fpl-row"><div class="fpl-dot" style="background:#00aa44;box-shadow:0 0 5px rgba(0,180,80,0.5)"></div><span class="fpl-pos">Bowler</span><span class="fpl-name" style="color:var(--green)" data-editable="fpos-bowler">Mohan</span></div>
+          <div class="fpl-row"><div class="fpl-dot" style="background:#aa00cc"></div><span class="fpl-pos">Wicket Keeper</span><span class="fpl-name" style="color:var(--purple)" data-editable="fpos-wk">Ratheesh</span></div>
+          <div class="fpl-row"><div class="fpl-dot" style="background:#0088ff"></div><span class="fpl-pos">Mid On</span><span class="fpl-name" data-editable="fpos-midon">Ragul / Abdul</span></div>
+          <div class="fpl-row"><div class="fpl-dot" style="background:#ff8800"></div><span class="fpl-pos">Mid Off</span><span class="fpl-name" data-editable="fpos-midoff">Rogith</span></div>
+          <div class="fpl-row"><div class="fpl-dot" style="background:#ff8800"></div><span class="fpl-pos">Cover</span><span class="fpl-name" data-editable="fpos-cover">Ragul / Lakshay</span></div>
+          <div class="fpl-row"><div class="fpl-dot" style="background:#0088ff"></div><span class="fpl-pos">Point</span><span class="fpl-name" data-editable="fpos-point">Sharada / Lakshay</span></div>
+          <div class="fpl-row"><div class="fpl-dot" style="background:#0088ff"></div><span class="fpl-pos">Gully</span><span class="fpl-name" data-editable="fpos-gully">Varun</span></div>
+          <div class="fpl-row"><div class="fpl-dot" style="background:#ff8800"></div><span class="fpl-pos">1st Slip</span><span class="fpl-name" data-editable="fpos-slip1">Prashant</span></div>
+          <div class="fpl-row"><div class="fpl-dot" style="background:#ff8800"></div><span class="fpl-pos">2nd Slip</span><span class="fpl-name" data-editable="fpos-slip2">Avinash</span></div>
+          <div class="fpl-row"><div class="fpl-dot" style="background:#ff8800"></div><span class="fpl-pos">Square Leg</span><span class="fpl-name" data-editable="fpos-sqleg">Sagar</span></div>
+          <div class="fpl-row"><div class="fpl-dot" style="background:#ff8800"></div><span class="fpl-pos">Deep 3rd Man</span><span class="fpl-name" data-editable="fpos-3rdman">Ambati</span></div>
+        </div>
+      </div>
+
+    </div><!-- /field-wrap -->
+  </div><!-- /field-section -->
+
+</div><!-- /page-goals -->
+
+<!-- ══ EDIT MODE FLOATING BAR ══ -->
+<div class="edit-mode-bar" id="edit-mode-bar">
+  <span class="emb-label" id="emb-label">Edit Mode</span>
+  <div class="emb-toggle" id="emb-toggle" onclick="toggleEditMode()">
+    <div class="emb-toggle-knob"></div>
+  </div>
+  <span class="emb-count" id="emb-count">0 edits</span>
+  <button class="ep-btn ep-cancel" style="border-radius:20px;padding:0.25rem 0.75rem" onclick="resetAllEdits()" title="Reset all content to defaults">↩ Reset All</button>
+</div>
+
+<!-- ══ EDIT POPOVER ══ -->
+<div class="edit-popover" id="edit-popover" style="display:none">
+  <div class="edit-popover-label" id="ep-label">✏️ Editing</div>
+  <textarea id="ep-textarea" rows="2"></textarea>
+  <div class="edit-popover-btns">
+    <button class="ep-btn ep-reset" onclick="resetSingleEdit()">↩ Reset</button>
+    <button class="ep-btn ep-cancel" onclick="closeEditPopover()">Cancel</button>
+    <button class="ep-btn ep-save" onclick="saveEditPopover()">Save ✓</button>
   </div>
 </div>
 
@@ -805,128 +1139,6 @@ canvas{max-height:210px}
   </div>
 </div>
 
-<!-- ══ FIREBASE DB SETUP PAGE ══ -->
-<div class="page" id="page-dbsetup">
-  <div class="page-header">
-    <div class="page-eyebrow">One-time Setup</div>
-    <h1 class="page-title" style="background:linear-gradient(135deg,var(--text),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">🔥 Firebase Setup</h1>
-    <p class="page-sub">Connect a free real-time database so all teammates share the same data instantly.</p>
-  </div>
-
-  <div id="db-status-card" class="card card-orange" style="margin-bottom:1.5rem">
-    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-      <div>
-        <div class="chart-title" style="color:var(--orange);margin-bottom:0.25rem">Current Status</div>
-        <span id="db-status-big" style="font-family:'Rajdhani';font-weight:700;font-size:1rem;color:var(--muted)">Checking…</span>
-      </div>
-      <div style="margin-left:auto;text-align:right">
-        <div style="font-size:0.72rem;color:var(--muted);font-weight:500">Once connected:</div>
-        <div style="font-size:0.82rem;font-weight:700;color:var(--green)">✅ All teammates share live data</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- STEP BY STEP -->
-  <div style="display:flex;flex-direction:column;gap:1.25rem">
-
-    <div class="card">
-      <div style="display:flex;gap:1rem;align-items:flex-start">
-        <div style="font-family:'Bebas Neue';font-size:2.5rem;color:var(--orange);line-height:1;flex-shrink:0">1</div>
-        <div>
-          <div class="chart-title" style="color:var(--orange)">Create a free Firebase project</div>
-          <p style="font-size:0.88rem;color:var(--muted);margin-bottom:0.75rem;font-weight:500">Go to <a href="https://console.firebase.google.com" target="_blank" style="color:var(--cyan)">console.firebase.google.com</a> and sign in with your Google account.</p>
-          <ol style="font-size:0.88rem;color:var(--text);line-height:2;padding-left:1.25rem;font-weight:500">
-            <li>Click <strong style="color:var(--cyan)">"Add project"</strong></li>
-            <li>Name it <strong style="color:var(--cyan)">htceca2</strong> (or anything)</li>
-            <li>Disable Google Analytics (not needed) → click <strong style="color:var(--cyan)">"Create project"</strong></li>
-          </ol>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div style="display:flex;gap:1rem;align-items:flex-start">
-        <div style="font-family:'Bebas Neue';font-size:2.5rem;color:var(--orange);line-height:1;flex-shrink:0">2</div>
-        <div style="width:100%">
-          <div class="chart-title" style="color:var(--orange)">Enable Firestore Database</div>
-          <ol style="font-size:0.88rem;color:var(--text);line-height:2;padding-left:1.25rem;font-weight:500">
-            <li>In the left sidebar click <strong style="color:var(--cyan)">Build → Firestore Database</strong></li>
-            <li>Click <strong style="color:var(--cyan)">"Create database"</strong></li>
-            <li>Choose <strong style="color:var(--cyan)">Start in test mode</strong> → click Next</li>
-            <li>Select <strong style="color:var(--cyan)">europe-west1</strong> (closest to Netherlands) → Enable</li>
-          </ol>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div style="display:flex;gap:1rem;align-items:flex-start">
-        <div style="font-family:'Bebas Neue';font-size:2.5rem;color:var(--orange);line-height:1;flex-shrink:0">3</div>
-        <div style="width:100%">
-          <div class="chart-title" style="color:var(--orange)">Get your config keys</div>
-          <ol style="font-size:0.88rem;color:var(--text);line-height:2;padding-left:1.25rem;font-weight:500">
-            <li>Go to <strong style="color:var(--cyan)">Project Settings</strong> (gear ⚙️ icon, top left)</li>
-            <li>Scroll to <strong style="color:var(--cyan)">"Your apps"</strong> → click the <strong style="color:var(--cyan)">&lt;/&gt; Web</strong> icon</li>
-            <li>Register the app (any name, e.g. <em>htceca2-web</em>)</li>
-            <li>You'll see a <code style="background:var(--card2);padding:2px 6px;border-radius:3px;color:var(--cyan)">firebaseConfig</code> object with all the keys</li>
-          </ol>
-        </div>
-      </div>
-    </div>
-
-    <div class="card card-gold">
-      <div style="display:flex;gap:1rem;align-items:flex-start">
-        <div style="font-family:'Bebas Neue';font-size:2.5rem;color:var(--gold);line-height:1;flex-shrink:0">4</div>
-        <div style="width:100%">
-          <div class="chart-title" style="color:var(--gold)">Paste your config into index.html</div>
-          <p style="font-size:0.88rem;color:var(--muted);margin-bottom:0.75rem;font-weight:500">Open <code style="background:var(--card2);padding:2px 6px;border-radius:3px;color:var(--cyan)">index.html</code> in any text editor and find the section near the top that says:</p>
-          <pre style="background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;font-size:0.78rem;overflow-x:auto;color:#aaa;line-height:1.7">const FIREBASE_CONFIG = {
-  apiKey:            "PASTE_YOUR_API_KEY_HERE",
-  authDomain:        "PASTE_YOUR_AUTH_DOMAIN_HERE",
-  projectId:         "PASTE_YOUR_PROJECT_ID_HERE",
-  storageBucket:     "PASTE_YOUR_STORAGE_BUCKET_HERE",
-  messagingSenderId: "PASTE_YOUR_MESSAGING_SENDER_ID_HERE",
-  appId:             "PASTE_YOUR_APP_ID_HERE"
-};</pre>
-          <p style="font-size:0.88rem;color:var(--text);margin-top:0.75rem;font-weight:500">Replace each <code style="background:var(--card2);padding:2px 6px;border-radius:3px;color:var(--gold)">PASTE_YOUR_…_HERE</code> with the values from your Firebase console. Save the file and re-upload to GitHub Pages.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div style="display:flex;gap:1rem;align-items:flex-start">
-        <div style="font-family:'Bebas Neue';font-size:2.5rem;color:var(--green);line-height:1;flex-shrink:0">5</div>
-        <div style="width:100%">
-          <div class="chart-title" style="color:var(--green)">Migrate your existing data (optional)</div>
-          <p style="font-size:0.88rem;color:var(--muted);margin-bottom:0.75rem;font-weight:500">If you've already entered availability or scores locally, click below to push your local data up to Firebase so nothing is lost.</p>
-          <button class="btn btn-green" onclick="migrateLocalToFirebase()">⬆️ Upload My Local Data to Firebase</button>
-          <div id="migrate-status" style="font-size:0.82rem;color:var(--muted);margin-top:0.5rem;font-weight:500"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card" style="border-color:rgba(74,112,144,0.3)">
-      <div class="chart-title" style="margin-bottom:0.75rem">💡 Free Tier Limits (Firebase Spark Plan)</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;text-align:center">
-        <div style="background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:1rem">
-          <div style="font-family:'Bebas Neue';font-size:1.8rem;color:var(--cyan)">50K</div>
-          <div style="font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700">Reads / Day</div>
-        </div>
-        <div style="background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:1rem">
-          <div style="font-family:'Bebas Neue';font-size:1.8rem;color:var(--orange)">20K</div>
-          <div style="font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700">Writes / Day</div>
-        </div>
-        <div style="background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:1rem">
-          <div style="font-family:'Bebas Neue';font-size:1.8rem;color:var(--green)">1 GB</div>
-          <div style="font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700">Storage</div>
-        </div>
-      </div>
-      <p style="font-size:0.82rem;color:var(--muted);margin-top:0.75rem;font-weight:500">A 13-player cricket team will use a tiny fraction of this. <strong style="color:var(--text)">Completely free forever</strong> at this usage level.</p>
-    </div>
-
-  </div>
-</div>
-
 <script>
 // ══════════════════════════════════════════
 // BASE DATA
@@ -979,7 +1191,7 @@ function loadState(){
   try{
     const s=localStorage.getItem('htceca2_v3');
     if(s) state=JSON.parse(s);
-    ['extraMatches','playerNames','playerFlags','matchOverrides','stats2025','selections','availability','results'].forEach(k=>{if(!state[k])state[k]={};});
+    ['extraMatches','playerNames','playerFlags','matchOverrides','stats2025','selections','availability','results','customContent'].forEach(k=>{if(!state[k])state[k]={};});
     if(!Array.isArray(state.extraMatches))state.extraMatches=[];
   }catch(e){}
   rebuildPlayers();
@@ -994,18 +1206,6 @@ function rebuildPlayers(){
 }
 function saveState(){
   localStorage.setItem('htceca2_v3',JSON.stringify(state));
-  if(typeof window.fbSaveState==='function') window.fbSaveState();
-}
-async function migrateLocalToFirebase(){
-  const el=document.getElementById('migrate-status');
-  if(typeof window.fbSaveState!=='function'){
-    el.style.color='#ff6b6b';el.textContent='\u274C Firebase not configured yet. Complete steps 1-4 first.';return;
-  }
-  el.style.color='var(--gold)';el.textContent='\u23F3 Uploading local data...';
-  try{
-    await window.fbSaveState();
-    el.style.color='var(--green)';el.textContent='\u2705 Done! Your local data has been pushed to Firebase.';
-  }catch(e){el.style.color='#ff6b6b';el.textContent='\u274C Failed: '+e.message;}
 }
 
 // ══════════════════════════════════════════
@@ -1043,11 +1243,8 @@ function showPage(id){
   if(id==='roster')renderRoster();
   if(id==='selection')renderSelectionPage();
   if(id==='dashboard')renderDashboard();
-  if(id==='dbsetup'){
-    const bigEl=document.getElementById('db-status-big');
-    const statusEl=document.getElementById('db-status');
-    if(bigEl&&statusEl) bigEl.textContent=statusEl.textContent;
-  }
+  // goals page is static HTML, no render needed
+
 }
 
 // ══════════════════════════════════════════
@@ -1746,6 +1943,7 @@ function unlockAdmin(){
   if(document.getElementById('page-roster').classList.contains('active'))renderRoster();
   if(document.getElementById('page-selection').classList.contains('active'))renderSelectionPage();
   renderAdminBar();
+  updateEditModeBar();
 }
 function lockAdmin(){
   adminUnlocked=false;
@@ -1755,6 +1953,7 @@ function lockAdmin(){
   if(document.getElementById('page-roster').classList.contains('active'))renderRoster();
   if(document.getElementById('page-selection').classList.contains('active'))renderSelectionPage();
   renderAdminBar();
+  updateEditModeBar();
 }
 function renderAdminBar(){
   const el=document.getElementById('home-admin-bar');if(!el)return;
@@ -1834,11 +2033,250 @@ async function exportPDF(){
 function closeModal(id){document.getElementById(id).classList.add('hidden');}
 
 // ══════════════════════════════════════════
+// INLINE CONTENT EDITOR
+// ══════════════════════════════════════════
+let editModeOn = false;
+let currentEditKey = null;
+let currentEditEl = null;
+
+// Human-readable labels for each editable key
+const EDIT_LABELS = {
+  'sched-eyebrow':'Schedule — Eyebrow label',
+  'sched-title':'Schedule — Page title',
+  'sched-sub':'Schedule — Subtitle',
+  'roster-eyebrow':'Stats — Eyebrow label',
+  'roster-title':'Stats — Page title',
+  'roster-sub':'Stats — Subtitle',
+  'sel-eyebrow':'Selection — Eyebrow label',
+  'sel-title':'Selection — Page title',
+  'sel-sub':'Selection — Subtitle',
+  'dash-eyebrow':'Dashboard — Eyebrow label',
+  'dash-title':'Dashboard — Page title',
+  'dash-sub':'Dashboard — Subtitle',
+  'chart-runs-title':'Chart — Top Run Scorers title',
+  'chart-wkts-title':'Chart — Top Wicket Takers title',
+  'chart-scores-title':'Chart — Team Score Per Match title',
+  'chart-sr-title':'Chart — Strike Rates title',
+  'insights-title':'Insights — Section title',
+  'goals-eyebrow':'Goals — Eyebrow label',
+  'goals-title':'Goals — Page title',
+  'goals-sub':'Goals — Subtitle',
+  'bat-goal-1':'Batting — Top Order goal 1',
+  'bat-goal-2':'Batting — Top Order goal 2',
+  'bat-goal-3':'Batting — Top Order goal 3',
+  'bat-goal-4':'Batting — Middle Order goal',
+  'bat-goal-5':'Batting — Lower Middle goal',
+  'bat-players-1':'Batting — Top Order players (row 1)',
+  'bat-players-2':'Batting — Top Order players (row 2)',
+  'bat-players-3':'Batting — Top Order players (row 3)',
+  'bat-players-4':'Batting — Middle Order players',
+  'bat-players-5':'Batting — Lower Middle players',
+  'bowl-fast-target':'Bowling — Fast bowlers target',
+  'bowl-fast-players':'Bowling — Fast bowlers names',
+  'bowl-slow-target':'Bowling — Slow bowlers target',
+  'bowl-slow-players':'Bowling — Slow bowlers names',
+  'field-out-players':'Fielding — Out fielders',
+  'field-in-players':'Fielding — Inner circle fielders',
+  'fpos-bowler':'Field position — Bowler',
+  'fpos-wk':'Field position — Wicket Keeper',
+  'fpos-midon':'Field position — Mid On',
+  'fpos-midoff':'Field position — Mid Off',
+  'fpos-cover':'Field position — Cover',
+  'fpos-point':'Field position — Point',
+  'fpos-gully':'Field position — Gully',
+  'fpos-slip1':'Field position — 1st Slip',
+  'fpos-slip2':'Field position — 2nd Slip',
+  'fpos-sqleg':'Field position — Square Leg',
+  'fpos-3rdman':'Field position — Deep 3rd Man',
+};
+
+// Default content (captured at first run from the DOM)
+const EDIT_DEFAULTS = {};
+
+function initEditDefaults(){
+  document.querySelectorAll('[data-editable]').forEach(el=>{
+    const key = el.dataset.editable;
+    if(!EDIT_DEFAULTS[key]) EDIT_DEFAULTS[key] = el.innerHTML;
+  });
+}
+
+function applyStoredEdits(){
+  const edits = state.customContent || {};
+  document.querySelectorAll('[data-editable]').forEach(el=>{
+    const key = el.dataset.editable;
+    if(edits[key] !== undefined) el.innerHTML = edits[key];
+  });
+  updateEditCount();
+}
+
+function toggleEditMode(){
+  if(!adminUnlocked){ toggleAdminModal(); return; }
+  editModeOn = !editModeOn;
+  document.body.classList.toggle('edit-mode-active', editModeOn);
+  const toggle = document.getElementById('emb-toggle');
+  const label  = document.getElementById('emb-label');
+  toggle.classList.toggle('active', editModeOn);
+  label.textContent = editModeOn ? '✏️ Editing' : 'Edit Mode';
+  label.classList.toggle('on', editModeOn);
+  document.getElementById('edit-mode-bar').classList.toggle('edit-on', editModeOn);
+  if(!editModeOn) closeEditPopover();
+}
+
+function updateEditCount(){
+  const n = Object.keys(state.customContent||{}).length;
+  const el = document.getElementById('emb-count');
+  if(!el) return;
+  el.textContent = n === 0 ? 'No edits' : `${n} edit${n>1?'s':''}`;
+  el.classList.toggle('has-edits', n > 0);
+}
+
+// Called when an editable element is clicked in edit mode
+function handleEditClick(e){
+  if(!editModeOn || !adminUnlocked) return;
+  const el = e.target.closest('[data-editable]');
+  if(!el) return;
+  e.preventDefault(); e.stopPropagation();
+  openEditPopover(el);
+}
+
+function openEditPopover(el){
+  closeEditPopover(); // close any existing
+  currentEditEl  = el;
+  currentEditKey = el.dataset.editable;
+
+  const popover   = document.getElementById('edit-popover');
+  const textarea  = document.getElementById('ep-textarea');
+  const labelEl   = document.getElementById('ep-label');
+
+  // Prefer plain text for simple elements, HTML for ones with <strong> etc
+  const hasHTML = el.innerHTML.includes('<');
+  textarea.value = hasHTML ? el.innerHTML : el.textContent;
+  textarea.dataset.useHtml = hasHTML ? '1' : '0';
+
+  labelEl.textContent = '✏️  ' + (EDIT_LABELS[currentEditKey] || currentEditKey);
+  popover.style.display = 'block';
+
+  // Smart position — near the element, avoid going off-screen
+  const rect  = el.getBoundingClientRect();
+  const pw    = popover.offsetWidth || 340;
+  const ph    = 160;
+  const vw    = window.innerWidth;
+  const vh    = window.innerHeight;
+
+  let top  = rect.bottom + 8 + window.scrollY;
+  let left = rect.left   + window.scrollX;
+
+  // Flip up if not enough room below
+  if(rect.bottom + ph + 12 > vh) top = rect.top - ph - 8 + window.scrollY;
+  // Keep within right edge
+  if(left + pw > vw - 12) left = vw - pw - 12;
+  if(left < 8) left = 8;
+
+  popover.style.top  = top  + 'px';
+  popover.style.left = left + 'px';
+  textarea.focus();
+  textarea.select();
+
+  // Highlight the element
+  el.classList.add('editing-now');
+}
+
+function saveEditPopover(){
+  if(!currentEditEl || !currentEditKey) return;
+  const textarea = document.getElementById('ep-textarea');
+  const val = textarea.value.trim();
+  const useHTML = textarea.dataset.useHtml === '1';
+
+  if(!state.customContent) state.customContent = {};
+  state.customContent[currentEditKey] = val;
+
+  // Apply to ALL elements sharing this key (diagram dot + list row)
+  document.querySelectorAll(`[data-editable="${currentEditKey}"]`).forEach(el=>{
+    if(useHTML) el.innerHTML = val;
+    else        el.textContent = val;
+    el.classList.add('just-saved');
+    setTimeout(()=>el.classList.remove('just-saved'), 1200);
+  });
+
+  saveState();
+  updateEditCount();
+  closeEditPopover();
+}
+
+function closeEditPopover(){
+  document.getElementById('edit-popover').style.display = 'none';
+  if(currentEditEl) currentEditEl.classList.remove('editing-now');
+  currentEditEl = null; currentEditKey = null;
+}
+
+function resetSingleEdit(){
+  if(!currentEditKey) return;
+  const textarea = document.getElementById('ep-textarea');
+  const def = EDIT_DEFAULTS[currentEditKey];
+  if(def !== undefined){
+    textarea.value = def;
+    // Apply immediately
+    document.querySelectorAll(`[data-editable="${currentEditKey}"]`).forEach(el=>{
+      el.innerHTML = def;
+    });
+    delete state.customContent[currentEditKey];
+    saveState();
+    updateEditCount();
+  }
+  closeEditPopover();
+}
+
+function resetAllEdits(){
+  if(!confirm('Reset ALL content edits back to defaults?')) return;
+  state.customContent = {};
+  saveState();
+  document.querySelectorAll('[data-editable]').forEach(el=>{
+    const key = el.dataset.editable;
+    if(EDIT_DEFAULTS[key] !== undefined) el.innerHTML = EDIT_DEFAULTS[key];
+  });
+  updateEditCount();
+  closeEditPopover();
+}
+
+// Show/hide the edit mode bar based on admin state
+function updateEditModeBar(){
+  const bar = document.getElementById('edit-mode-bar');
+  if(!bar) return;
+  bar.style.display = adminUnlocked ? 'flex' : 'none';
+  if(!adminUnlocked && editModeOn){
+    editModeOn = false;
+    document.body.classList.remove('edit-mode-active');
+    closeEditPopover();
+  }
+}
+
+// Close popover on outside click or Escape
+document.addEventListener('click', e=>{
+  const popover = document.getElementById('edit-popover');
+  if(!popover || popover.style.display==='none') return;
+  if(!popover.contains(e.target) && !e.target.closest('[data-editable]'))
+    closeEditPopover();
+}, true);
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') closeEditPopover();
+  if((e.key==='Enter') && (e.ctrlKey||e.metaKey)) saveEditPopover();
+});
+
+// Delegate click handler for all editable elements
+document.addEventListener('click', handleEditClick, true);
+
+// ══════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════
 loadState();
+if(!state.customContent) state.customContent = {};
 renderHome();
 renderAdminBar();
+// Init content editing system
+initEditDefaults();
+applyStoredEdits();
+updateEditModeBar();
+updateEditCount();
 </script>
 </body>
 </html>
